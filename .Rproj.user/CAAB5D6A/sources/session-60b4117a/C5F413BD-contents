@@ -1,0 +1,12 @@
+library(tidyverse)
+library(readxl)
+
+anaerobosis <- read_excel("data/GSE42035anaerobosis.xlsx", sheet = "GSE42035Proteins")
+
+ggplot(anaerobosis, aes(x = "CC-124 Dark anoxic .5 hour")) +
+  geom_bar()
+
+library(Biobase)
+library(GEOquery)
+install.packages("GEOquery")
+install.packages("Biobase")
