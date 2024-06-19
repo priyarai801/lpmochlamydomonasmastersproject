@@ -196,8 +196,6 @@ sft <- pickSoftThreshold(datExpr, powerVector = powers, verbose = 5)
 # ..working on genes 1 through 141 of 141
 # Error in summary(lm1)$coefficients[2, 1] : subscript out of bounds
 
-#going to write out datExpr as a file and attach it if it can find
-#anything wrong
 
 # Write datExpr to a CSV file
 write.csv(datExpr, file = "datExpr.csv", row.names = TRUE)
@@ -280,3 +278,118 @@ str(datExpr)
 
 #--------------------------------------------------------------------
 #i've got the GSE42035 FPKM tracking data from Phytozome
+
+install.packages("readr")
+library(readr)
+
+gse42035_fpkm_data <- read_tsv("GSE42035_genes.fpkm_tracking")
+
+head(gse42035_fpkm_data)
+
+#in GSE42035_fpkm_data I have 17,741 genes
+#I think next step is to figure out which columns I actually need
+#the FPKMs are labelled with SRRs
+
+#in gse42035_fpkm_data I want columns 4 (gene_id), 10 (SRR611223_FPKM CC-124 Light oxic)
+#SRR611224 CC-124 Dark anoxic 0.5 hours column 50 and SRR611225 Dark anoxic 6 hours column 14
+
+library(dplyr)
+
+analysis_gse42035_fpkm_data <- gse42035_fpkm_data %>%
+  select(4, 10, 50, 14)
+
+write.csv(analysis_gse42035_fpkm_data, "analysis_gse42035_fpkm_data.csv", row.names = FALSE)
+
+#below code is just the genes of interest to see if it's suitable
+#to have a FPKM cutoff value of 1
+
+genes_of_interest <- c("Cre07.g317250", "Cre06.g270500", "Cre06.g273100")
+
+filtered_genes <- analysis_gse42035_fpkm_data %>%
+  filter(gene_id %in% genes_of_interest)
+
+head(filtered_genes)
+
+#I will remove the genes with 0 in at least 2 of the columns in either column 2, 3 or 4
+
+has_two_zeros <- function(row) {
+  sum(row == 0) >= 2
+}
+
+zero_filtered_gse42035_fpkm_data <- analysis_gse42035_fpkm_data %>%
+  filter(!apply(select(., 2, 3, 4), 1, has_two_zeros))
+
+head(zero_filtered_gse42035_fpkm_data)
+dim(zero_filtered_gse42035_fpkm_data)
+
+#Doing so reduced number of genes from 17741 -> 17353
+#Number is still way too big
+
+#To reduce it further did quantile reduction
+#bear in mind threshold can not go over 0.796424
+
+# Step 1: Calculate the mean FPKM for each gene across all samples
+zero_filtered_gse42035_fpkm_data$mean_fpkm <- rowMeans(zero_filtered_gse42035_fpkm_data[ , -1], na.rm = TRUE)
+
+# Step 2: Calculate the quantiles of the mean FPKM
+fpkm_quantiles <- quantile(zero_filtered_gse42035_fpkm_data$mean_fpkm, probs = seq(0, 1, 0.01))
+
+# View the quantiles to choose a threshold
+print(fpkm_quantiles)
+
+#Looks like threshold of 15% is okay = 0.6692659
+# Step 3: Choose a quantile threshold
+threshold <- fpkm_quantiles["15%"]
+
+# Step 4: Filter the genes using the chosen threshold
+filtered_data <- zero_filtered_gse42035_fpkm_data %>%
+  filter(mean_fpkm > threshold)
+
+# Remove the mean_fpkm column as it's no longer needed
+filtered_data <- filtered_data %>%
+  select(-mean_fpkm)
+
+# View the filtered dataframe
+dim(filtered_data)
+
+#Genes reduced to 14750 - still way too big
+
+#---------------------------------------------------------------------
+#CODE RAN UP TO HERE
+
+# Load necessary libraries
+library(dplyr)
+
+# Assuming filtered_data is already loaded
+
+# Step 1: Calculate the variance for each gene across all samples
+filtered_data <- filtered_data %>%
+  rowwise() %>%
+  mutate(variance = var(c_across(-gene_id)))
+
+# Step 2: Select the top 1,000 genes with the highest variance
+top_genes <- filtered_data %>%
+  arrange(desc(variance)) %>%
+  slice(1:1000)
+
+# Step 3: Ensure inclusion of genes of interest
+genes_of_interest <- c("Cre07.g317250", "Cre06.g270500", "Cre06.g273100")
+top_genes <- filtered_data %>%
+  filter(gene_id %in% genes_of_interest | gene_id %in% top_genes$gene_id) %>%
+  select(-variance)  # Remove the variance column if not needed
+
+# View the top genes
+head(top_genes)
+dim(top_genes)
+
+# Prepare data for WGCNA
+datExpr <- as.data.frame(t(top_genes[,-1]))
+rownames(datExpr) <- top_genes$gene_id
+
+# Check the final dimensions
+dim(datExpr)
+
+# Write the filtered dataframe to a CSV file
+write.csv(top_genes, "top_var_filtered_gse42035_fpkm_data.csv", row.names = FALSE)
+
+
