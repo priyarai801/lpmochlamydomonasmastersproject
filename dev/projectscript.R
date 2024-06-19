@@ -22,9 +22,9 @@ anaerobiosiscre06g273100 <- read.table("anaerobiosisfpkmcre06g273100coexpressed.
 
 # X (1st column) + CC.124.Light.oxic (5th column) + CC.124.Dark.anoxic.6.hours (4th column)
 library(dplyr)
-selectedcolumnsanaerobiosiscre07g317250 <- anaerobiosiscre07g317250 %>% select(1, 5, 4)
-selectedcolumnsanaerobiosiscre06g270500 <- anaerobiosiscre06g270500 %>% select(1, 5, 4)
-selectedcolumnsanaerobiosiscre06g273100 <- anaerobiosiscre06g273100 %>% select(1, 5, 4)
+selectedcolumnsanaerobiosiscre07g317250 <- anaerobiosiscre07g317250 %>% select(1, 5, 3, 4)
+selectedcolumnsanaerobiosiscre06g270500 <- anaerobiosiscre06g270500 %>% select(1, 5, 3, 4)
+selectedcolumnsanaerobiosiscre06g273100 <- anaerobiosiscre06g273100 %>% select(1, 5, 3, 4)
 
 #Merge 3 dataframes with multiple columns
 merged_df <- bind_rows(selectedcolumnsanaerobiosiscre07g317250, selectedcolumnsanaerobiosiscre06g270500, selectedcolumnsanaerobiosiscre06g273100)
@@ -66,7 +66,7 @@ plot_data_long <- pca_scores_merged_df_unique %>%
 library(ggplot2)
 library(tidyr)
 #Trying to plot the PCA - the points overlap with each other. I realised that
-#the PC! and PC2 values are the exact same for the same gene across the two different samples - why?
+#the PC1 and PC2 values are the exact same for the same gene across the two different samples - why?
 
 p <- ggplot(plot_data_long, aes(x = PC1, y = PC2, color = Sample)) +
   geom_point(size = 1) +
@@ -147,89 +147,6 @@ BiocManager::install("WGCNA")
 if (!require("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 BiocManager::install(version = "3.19")
-#---------------------------------------------------------------------
-
-# Transpose the data for WGCNA so genes are now columns, and conditions are rows
-#so that it is easier for correlation calculations
-datExpr <- as.data.frame(t(log_rpkm))
-
-
-# Choose a set of soft-thresholding powers
-powers = c(1:10, seq(from = 12, to=20, by=2))
-
-# Call the network topology analysis function
-sft = pickSoftThreshold(datExpr, powerVector = powers, verbose = 5)
-
-# Plot the results:
-par(mfrow = c(1,2))
-cex1 = 0.9
-
-# Scale-free topology fit index as a function of the soft-thresholding power
-plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
-     xlab = "Soft Threshold (power)", ylab = "Scale Free Topology Model Fit, signed R^2",
-     type = "n", main = paste("Scale independence"))
-text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
-     labels = powers, cex = cex1, col = "red")
-abline(h = 0.90, col = "red")
-
-# Mean connectivity as a function of the soft-thresholding power
-plot(sft$fitIndices[,1], sft$fitIndices[,5],
-     xlab = "Soft Threshold (power)", ylab = "Mean Connectivity", 
-     type = "n", main = paste("Mean connectivity"))
-text(sft$fitIndices[,1], sft$fitIndices[,5], labels = powers, cex = cex1, col = "red")
-
-softPower = sft$powerEstimate
-
-# Create adjacency matrix
-adjacency = adjacency(datExpr, power = softPower)
-
-# Turn adjacency into Topological Overlap Matrix (TOM)
-TOM = TOMsimilarity(adjacency)
-dissTOM = 1 - TOM
-
-# Perform hierarchical clustering
-geneTree = hclust(as.dist(dissTOM), method = "average")
-
-# Module identification using dynamic tree cut
-dynamicMods = cutreeDynamic(dendro = geneTree, distM = dissTOM,
-                            deepSplit = 2, pamRespectsDendro = FALSE,
-                            minClusterSize = 30)
-
-# Convert labels to colors for plotting
-dynamicColors = labels2colors(dynamicMods)
-
-# Plot the dendrogram and the module colors
-plotDendroAndColors(geneTree, dynamicColors, "Dynamic Tree Cut")
-
-# Define the trait data
-trait_data <- data.frame(
-  Light = c(rep(1, 3), rep(0, 3)),
-  Dark = c(rep(0, 3), rep(1, 3))
-)
-rownames(trait_data) <- colnames(datExpr)
-
-# Module eigengenes
-MEs = moduleEigengenes(datExpr, colors = dynamicColors)$eigengenes
-
-# Correlate modules with traits
-moduleTraitCor = cor(MEs, trait_data, use = "p")
-moduleTraitPvalue = corPvalueStudent(moduleTraitCor, nSamples = nrow(datExpr))
-
-# Plot the correlations
-textMatrix = paste(signif(moduleTraitCor, 2), "\n(",
-                   signif(moduleTraitPvalue, 1), ")", sep = "")
-par(mar = c(6, 8.5, 3, 3))
-labeledHeatmap(Matrix = moduleTraitCor,
-               xLabels = names(trait_data),
-               yLabels = names(MEs),
-               ySymbols = names(MEs),
-               colorLabels = FALSE,
-               colors = blueWhiteRed(50),
-               textMatrix = textMatrix,
-               setStdMargins = FALSE,
-               cex.text = 0.5,
-               zlim = c(-1,1),
-               main = paste("Module-trait relationships"))
 
 #--------------------------------------------------------------------
 #Trying WGCNA again
@@ -237,6 +154,8 @@ labeledHeatmap(Matrix = moduleTraitCor,
 # Set row names to gene names
 rownames(merged_df_unique) <- merged_df_unique$X
 merged_df_unique <- merged_df_unique %>% select(-X)
+
+log_rpkm <- log2(merged_df_unique + 1)
 
 # Transpose data for WGCNA
 datExpr <- as.data.frame(t(log_rpkm))
@@ -282,3 +201,82 @@ sft <- pickSoftThreshold(datExpr, powerVector = powers, verbose = 5)
 
 # Write datExpr to a CSV file
 write.csv(datExpr, file = "datExpr.csv", row.names = TRUE)
+
+#was it bcos the data was not numeric?
+datExpr <- as.data.frame(lapply(datExpr, as.numeric))
+#nope not it
+
+#says to try doing it manually?
+# Manually run the steps inside pickSoftThreshold
+nGenes <- ncol(datExpr)
+nSamples <- nrow(datExpr)
+
+# Initialize variables to hold the fit indices
+fitIndices <- matrix(0, nrow = length(powers), ncol = 4)
+colnames(fitIndices) <- c("Power", "SFT.R.sq", "slope", "truncated.R.sq")
+
+for (i in 1:length(powers)) {
+  power <- powers[i]
+  
+  # Calculate adjacency
+  adjacency <- adjacency(datExpr, power = power)
+  
+  # Check the adjacency matrix
+  cat("Adjacency matrix for power:", power, "\n")
+  print(head(adjacency))
+  
+  # Calculate connectivity
+  k <- apply(adjacency, 1, sum) - 1
+  
+  # Check the connectivity values
+  cat("Connectivity for power:", power, "\n")
+  print(head(k))
+  
+  # Scale-free topology fit index
+  fit <- scaleFreeFitIndex(k)
+  
+  # Store the fit indices
+  fitIndices[i, 1] <- power
+  fitIndices[i, 2] <- fit$Rsquared.SFT
+  fitIndices[i, 3] <- fit$slope
+  fitIndices[i, 4] <- fit$truncated.R.sq
+}
+
+# Print the fit indices
+print(fitIndices)
+
+# Select the optimal power
+optimalPower <- fitIndices[which.max(fitIndices[, 2]), 1]
+print(optimalPower)
+
+#running the for i gives same error as with the sft code line 
+#Error in summary(lm1)$coefficients[2, 1] : subscript out of bounds
+#yeah the fitIndices should be not zero - that's where the error is 
+
+#when running the for i, for the power 1 all the adjacency matrix values are 1 and
+#the connectivity values are 140 - this is an error so 
+#trying to see if the calculation for the correlation and adjacency matrix are wrong
+#correlation values are 1 or -1 which should not be the case
+
+str(datExpr)
+
+# If your data frame needs to be transposed
+
+datExpr <- as.data.frame(t(datExpr))
+
+
+datExpr <- t(datExpr)
+datExpr <- as.data.frame(datExpr)
+
+# Check the structure again
+str(datExpr)
+
+#the SFT.R.sq values are too low, for the power 3, the value is 0.000378
+#scale free topology value is too low should be close to 0
+#or else it's not suitable for WGCNA
+#say the way to overcome this is to increase the number of samples
+#so either i include the other conditions
+# or i can try starting from scratch and generating counts matrix myself
+
+#--------------------------------------------------------------------
+#i've got the GSE42035 FPKM tracking data from Phytozome
