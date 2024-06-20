@@ -285,6 +285,7 @@ library(readr)
 gse42035_fpkm_data <- read_tsv("GSE42035_genes.fpkm_tracking")
 
 head(gse42035_fpkm_data)
+dim(gse42035_fpkm_data)
 
 #in GSE42035_fpkm_data I have 17,741 genes
 #I think next step is to figure out which columns I actually need
@@ -298,6 +299,7 @@ library(dplyr)
 analysis_gse42035_fpkm_data <- gse42035_fpkm_data %>%
   select(4, 10, 50, 14)
 
+head(analysis_gse42035_fpkm_data)
 write.csv(analysis_gse42035_fpkm_data, "analysis_gse42035_fpkm_data.csv", row.names = FALSE)
 
 #below code is just the genes of interest to see if it's suitable
@@ -309,6 +311,7 @@ filtered_genes <- analysis_gse42035_fpkm_data %>%
   filter(gene_id %in% genes_of_interest)
 
 head(filtered_genes)
+dim(filtered_genes)
 
 #I will remove the genes with 0 in at least 2 of the columns in either column 2, 3 or 4
 
@@ -328,6 +331,7 @@ dim(zero_filtered_gse42035_fpkm_data)
 #To reduce it further did quantile reduction
 #bear in mind threshold can not go over 0.796424
 
+
 # Step 1: Calculate the mean FPKM for each gene across all samples
 zero_filtered_gse42035_fpkm_data$mean_fpkm <- rowMeans(zero_filtered_gse42035_fpkm_data[ , -1], na.rm = TRUE)
 
@@ -338,12 +342,20 @@ fpkm_quantiles <- quantile(zero_filtered_gse42035_fpkm_data$mean_fpkm, probs = s
 print(fpkm_quantiles)
 
 #Looks like threshold of 15% is okay = 0.6692659
+#aka the 15th percentile quantile threshold
 # Step 3: Choose a quantile threshold
 threshold <- fpkm_quantiles["15%"]
 
 # Step 4: Filter the genes using the chosen threshold
 filtered_data <- zero_filtered_gse42035_fpkm_data %>%
   filter(mean_fpkm > threshold)
+#Genes reduced to 14750 - still way too big
+
+# Step 1: Filter the genes where all FPKM values are above the threshold in all samples
+filtered_data <- zero_filtered_gse42035_fpkm_data %>%
+  filter(SRR611223_FPKM > threshold &
+           SRR611224_FPKM > threshold &
+           SRR611225_FPKM > threshold)
 
 # Remove the mean_fpkm column as it's no longer needed
 filtered_data <- filtered_data %>%
@@ -352,44 +364,56 @@ filtered_data <- filtered_data %>%
 # View the filtered dataframe
 dim(filtered_data)
 
-#Genes reduced to 14750 - still way too big
+#Genes reduced to 13775 - still way too big
 
 #---------------------------------------------------------------------
-#CODE RAN UP TO HERE
+#Trying to reduce the 13775 genes in filtered_data even further by only
+#selecting the top 1000 highest variance genes as these are most likely
+#to be biologically meaningful
 
-# Load necessary libraries
-library(dplyr)
+write.csv(filtered_data, "delete.csv", row.names = FALSE)
 
-# Assuming filtered_data is already loaded
-
-# Step 1: Calculate the variance for each gene across all samples
-filtered_data <- filtered_data %>%
+# Calculate the variance for each gene across the FPKM columns
+filtered_data <- zero_filtered_gse42035_fpkm_data %>%
   rowwise() %>%
-  mutate(variance = var(c_across(-gene_id)))
+  mutate(variance = var(c_across(SRR611223_FPKM:SRR611225_FPKM), na.rm = TRUE)) %>%
+  ungroup()
 
-# Step 2: Select the top 1,000 genes with the highest variance
+# Select the top 1000 genes with the highest variance
 top_genes <- filtered_data %>%
   arrange(desc(variance)) %>%
-  slice(1:1000)
+  slice(1:1000) %>%
+  select(gene_id, SRR611223_FPKM, SRR611224_FPKM, SRR611225_FPKM)
+#It's important you have the select line otherwise code will not reduce
+#the number of rows to 1000
+
+# View the top genes
+print(head(top_genes))
+dim(top_genes)
+#yep selecting the top 1000 genes removes the genes of interest 
+
+#--------------------------------------------------------------------
+#So adding back in the genes of interest
 
 # Step 3: Ensure inclusion of genes of interest
 genes_of_interest <- c("Cre07.g317250", "Cre06.g270500", "Cre06.g273100")
-top_genes <- filtered_data %>%
-  filter(gene_id %in% genes_of_interest | gene_id %in% top_genes$gene_id) %>%
-  select(-variance)  # Remove the variance column if not needed
+additional_genes <- filtered_data %>%
+  filter(gene_id %in% genes_of_interest)
 
-# View the top genes
-head(top_genes)
-dim(top_genes)
+# Combine the genes of interest with the top 1000 variance genes
+combined_genes <- bind_rows(top_genes, additional_genes) %>%
+  distinct(gene_id, .keep_all = TRUE) %>%
+  arrange(desc(variance)) %>%
+  slice(1:1003) %>%
+  select(gene_id, SRR611223_FPKM, SRR611224_FPKM, SRR611225_FPKM)
+  
+# View the combined genes
+head(combined_genes)
+dim(combined_genes)
 
-# Prepare data for WGCNA
-datExpr <- as.data.frame(t(top_genes[,-1]))
-rownames(datExpr) <- top_genes$gene_id
+write.csv(combined_genes,"combined_genes.csv", row.names=FALSE)
+#--------------------------------------------------------------------
+#now trying to make WGCNA
 
-# Check the final dimensions
-dim(datExpr)
-
-# Write the filtered dataframe to a CSV file
-write.csv(top_genes, "top_var_filtered_gse42035_fpkm_data.csv", row.names = FALSE)
-
+#I realised i did not log them, should i have???
 
