@@ -302,6 +302,14 @@ analysis_gse42035_fpkm_data <- gse42035_fpkm_data %>%
 head(analysis_gse42035_fpkm_data)
 write.csv(analysis_gse42035_fpkm_data, "analysis_gse42035_fpkm_data.csv", row.names = FALSE)
 
+#Code here is to log them which i should have done--------------------
+#will probably have to change later dataframe names
+
+# Log-transform the FPKM values (adding a small constant to avoid log(0))
+analysis_gse42035_fpkm_data <- analysis_gse42035_fpkm_data %>%
+  mutate(across(starts_with("SRR"), ~ log2(. + 1)))
+#---------------------------------------------------------------------
+
 #below code is just the genes of interest to see if it's suitable
 #to have a FPKM cutoff value of 1
 
@@ -330,18 +338,20 @@ dim(zero_filtered_gse42035_fpkm_data)
 
 #To reduce it further did quantile reduction
 #bear in mind threshold can not go over 0.796424
-
+#Actually now that've logged the FPKM values the threshold can not be
+#higher than 0.8451279
 
 # Step 1: Calculate the mean FPKM for each gene across all samples
 zero_filtered_gse42035_fpkm_data$mean_fpkm <- rowMeans(zero_filtered_gse42035_fpkm_data[ , -1], na.rm = TRUE)
 
-# Step 2: Calculate the quantiles of the mean FPKM
+# Step 2: Calculate the quantiles of the mean log FPKM
 fpkm_quantiles <- quantile(zero_filtered_gse42035_fpkm_data$mean_fpkm, probs = seq(0, 1, 0.01))
 
 # View the quantiles to choose a threshold
 print(fpkm_quantiles)
 
 #Looks like threshold of 15% is okay = 0.6692659
+#for log it's the same too 15% = 0.7228476
 #aka the 15th percentile quantile threshold
 # Step 3: Choose a quantile threshold
 threshold <- fpkm_quantiles["15%"]
@@ -365,9 +375,10 @@ filtered_data <- filtered_data %>%
 dim(filtered_data)
 
 #Genes reduced to 13775 - still way too big
+#idk how logging made a difference but now there are 13825 genes
 
 #---------------------------------------------------------------------
-#Trying to reduce the 13775 genes in filtered_data even further by only
+#Trying to reduce the 13825 genes with log  in filtered_data even further by only
 #selecting the top 1000 highest variance genes as these are most likely
 #to be biologically meaningful
 
@@ -404,16 +415,45 @@ additional_genes <- filtered_data %>%
 combined_genes <- bind_rows(top_genes, additional_genes) %>%
   distinct(gene_id, .keep_all = TRUE) %>%
   arrange(desc(variance)) %>%
-  slice(1:1003) %>%
+  slice(1:1004) %>%
   select(gene_id, SRR611223_FPKM, SRR611224_FPKM, SRR611225_FPKM)
   
 # View the combined genes
 head(combined_genes)
 dim(combined_genes)
+#No idea why after logging there are only 1002 genes here, but all the
+#genes of interest are still here
+
 
 write.csv(combined_genes,"combined_genes.csv", row.names=FALSE)
 #--------------------------------------------------------------------
 #now trying to make WGCNA
 
-#I realised i did not log them, should i have???
+#I realised i did not log them, should i have??? - i'm not sure at what
+#I should have logged them
 
+library(WGCNA)
+library(dplyr)
+library(readr)
+library(tibble)
+
+# Ensure gene_id is set as row names
+combined_genes <- combined_genes %>% column_to_rownames("gene_id")
+
+# Check the structure of the data
+head(combined_genes)
+
+# Transpose the data for WGCNA (genes as columns and samples as rows)
+datExpr <- as.data.frame(t(combined_genes))
+
+# Check the transposed data structure
+head(datExpr)
+str(datExpr)
+
+#---------------------------------------------------------------------
+#CODE RAN UP TO HERE 
+#Says I have to check for outliers? wouldn't me deliberately adding back
+#the genes of interest despite them not being the top 1000 variance genes
+#make them more prone to being an outlier?
+sampleTree <- hclust(dist(datExpr), method = "average")
+plot(sampleTree, main = "Sample clustering to detect outliers", sub = "", xlab = "")
