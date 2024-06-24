@@ -447,13 +447,248 @@ head(combined_genes)
 datExpr <- as.data.frame(t(combined_genes))
 
 # Check the transposed data structure
-head(datExpr)
 str(datExpr)
-
+dim(datExpr)
 #---------------------------------------------------------------------
-#CODE RAN UP TO HERE 
+
+
 #Says I have to check for outliers? wouldn't me deliberately adding back
 #the genes of interest despite them not being the top 1000 variance genes
 #make them more prone to being an outlier?
-sampleTree <- hclust(dist(datExpr), method = "average")
-plot(sampleTree, main = "Sample clustering to detect outliers", sub = "", xlab = "")
+# sampleTree <- hclust(dist(datExpr), method = "average")
+# plot(sampleTree, main = "Sample clustering to detect outliers", sub = "", xlab = "")
+
+
+powers <- c(1:10, seq(from = 12, to = 50, by = 2))
+
+sft <- pickSoftThreshold(datExpr, powerVector = powers, verbose = 5)
+
+#CODE RAN UP TO HERE 
+
+#Next step is to visualise the results from the pickSoftThreshold function
+
+# Plot the results
+sizeGrWindow(9, 5)
+par(mfrow = c(1, 2))
+
+# Scale-free topology fit index as a function of the soft-thresholding power
+plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+     xlab="Soft Threshold (power)", ylab="Scale Free Topology Model Fit, signed R^2", type="n", 
+     main = "Scale independence")
+text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2], labels=powers, cex=0.9, col="red")
+
+# Mean connectivity as a function of the soft-thresholding power
+plot(sft$fitIndices[,1], sft$fitIndices[,5], 
+     xlab="Soft Threshold (power)", ylab="Mean Connectivity", type="n", 
+     main = "Mean connectivity")
+text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=0.9, col="red")
+
+#--------------------------------------------------------------------
+
+#Go with power 5, the scale-free score is 0.025 which is very low but
+#number of samples is too low
+
+# Set the soft threshold power
+softPower <- 5
+
+# Construct the adjacency matrix
+adjacency <- adjacency(datExpr, power = softPower)
+
+dim(adjacency)
+#1002 1002
+#calculates it for 1002 genes x 1002 genes hence why there are
+#1004004 elements
+
+# Turn adjacency into topological overlap matrix (TOM)
+TOM <- TOMsimilarity(adjacency)
+dim(TOM)
+#1002 1002
+dissTOM <- 1 - TOM
+#in this matrix values of 0 mean very similar whereas 1 not similar at all
+
+# Hierarchical clustering of the genes
+geneTree <- hclust(as.dist(dissTOM), method = "average")
+plot(geneTree, main = "Gene clustering on TOM-based dissimilarity", sub = "", xlab = "")
+
+
+# Dynamic tree cut to identify modules
+dynamicMods <- cutreeDynamic(dendro = geneTree, distM = dissTOM, deepSplit = 2, pamRespectsDendro = FALSE)
+#cutreeDynamic will calculate a cutHeight itself to give a reasonable
+#number of modules
+#set cutHeight to 0.767 ===> 99% of the (truncated) height range in dendro.
+
+table(dynamicMods)
+#shows that there are 5 modules with the no. of genes in the corresponding
+#columns
+
+#assigns colours to the modules
+dynamicColors <- labels2colors(dynamicMods)
+
+# Plot the dendrogram and the module colors
+plotDendroAndColors(geneTree, dynamicColors, "Dynamic Tree Cut", dendroLabels = FALSE, hang = 0.03, addGuide = TRUE, guideHang = 0.05)
+
+#---------------------------------------------------------------------
+#After module identification you need to summarise the modules by
+#calculating the module eigengenes
+
+# Calculate module eigengenes
+MEs <- moduleEigengenes(datExpr, colors = dynamicColors)$eigengenes
+
+# Calculate the dissimilarity of module eigengenes
+MEDiss <- 1 - cor(MEs)
+
+# Cluster module eigengenes
+METree <- hclust(as.dist(MEDiss), method = "average")
+
+# Plot the module eigengene dendrogram
+plot(METree, main = "Clustering of module eigengenes", xlab = "", sub = "")
+
+#---------------------------------------------------------------------
+#Next step is to relate modules to external/phenotypic traits - i think
+#this is an optional step so unsure at this point to apply this to my
+#network
+
+#---------------------------------------------------------------------
+#To export the network to Cytoscape
+#Exporting all 5 modules to Cytoscape - there is also an option of 
+#exporting just a single module
+
+
+# Select all unique modules
+modules <- unique(dynamicColors)
+probes <- colnames(datExpr)
+
+# Loop over each module to export the corresponding network data
+for (module in modules) {
+  inModule <- (dynamicColors == module)
+  modProbes <- probes[inModule]
+  modTOM <- TOM[inModule, inModule]
+  
+  # Export the edge list for the module
+  exportNetworkToCytoscape(
+    modTOM,
+    edgeFile = paste0("CytoscapeInput-edges-", module, ".txt"),
+    nodeFile = paste0("CytoscapeInput-nodes-", module, ".txt"),
+    weighted = TRUE,
+    threshold = 0.02, # Adjust this threshold based on your preference
+    nodeNames = modProbes,
+    nodeAttr = dynamicColors[inModule]
+  )
+}
+
+#--------------------------------------------------------------------
+#Searched the genes of interest, here are the module colours the
+#genes belong to
+
+# Cre07.g317250 is in the green module
+# Cre06.g270500 is in turquoise module
+# Cre06.g273100 is in the yellow module
+
+#---------------------------------------------------------------------
+#For now extract the top 2000 edges from the modules containing the
+#genes of interest: green, turquiose, yellow
+
+#Extract top 2000 edges from green module Cre07.g317250
+library(dplyr)
+
+green_edges <- read.table("CytoscapeInput-edges-green.txt", header = TRUE, sep = "\t")
+
+# Sort edges by weight from highest to lowest
+green_edges_sorted <- green_edges %>%
+  arrange(desc(weight))
+
+#Select the top 2000 edges
+green_top_2000_edges <- green_edges_sorted %>%
+  slice(1:2000)
+
+#Export the filtered edges to a new file
+write.table(green_top_2000_edges, "CytoscapeInput-edges-green-top2000.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+
+#--------------------------------------------------------------------
+#Extract top 2000 edges from turquoise module Cre06.g270500
+#THIS DOES NOT WORK - THE TURQUOISE MODULE IS VERY BIG
+#AND THE WEIGHT SCORE OF THE EDGES CORRESPONDING TO Cre06.g270500
+#ARE NOWHERE NEAR THE TOP
+
+turquoise_edges <- read.table("CytoscapeInput-edges-turquoise.txt", header = TRUE, sep = "\t")
+
+# Sort edges by weight from highest to lowest
+turquoise_edges_sorted <- turquoise_edges %>%
+  arrange(desc(weight))
+
+#Select the top 2000 edges
+turquoise_top_2000_edges <- turquoise_edges_sorted %>%
+  slice(1:2000)
+
+#Export the filtered edges to a new file
+write.table(turquoise_top_2000_edges, "CytoscapeInput-edges-turquoise-top2000.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+
+#---------------------------------------------------------------------
+#Extract top 2000 edges from yellow module Cre06.g273100
+
+yellow_edges <- read.table("CytoscapeInput-edges-yellow.txt", header = TRUE, sep = "\t")
+
+# Sort edges by weight from highest to lowest
+yellow_edges_sorted <- yellow_edges %>%
+  arrange(desc(weight))
+
+#Select the top 2000 edges
+yellow_top_2000_edges <- yellow_edges_sorted %>%
+  slice(1:2000)
+
+#Export the filtered edges to a new file
+write.table(yellow_top_2000_edges, "CytoscapeInput-edges-yellow-top2000.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+
+#---------------------------------------------------------------------
+#I am foregoing the top 1000 weight edges because they remove the
+#data for the genes of interest
+
+#Here extracting the edges relating to Cre07.g317250 in the green module
+
+library(dplyr)
+
+green_edges <- read.table("CytoscapeInput-edges-green.txt", header = TRUE, sep = "\t")
+
+# Filter edges containing 'Cre07.g317250' in either 'fromNode' or 'toNode'
+green_gene_of_interest_edges <- green_edges %>%
+  filter(fromNode == "Cre07.g317250" | toNode == "Cre07.g317250")
+
+head(green_gene_of_interest_edges)
+dim(green_gene_of_interest_edges)
+#129 6
+
+write.table(green_gene_of_interest_edges, "anaerobiosis_gse42035_edges_Cre07.g317250.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+
+#---------------------------------------------------------------------
+#Here extracting the edges relating to Cre06.g270500 in the turquoise module
+
+library(dplyr)
+
+turquoise_edges <- read.table("CytoscapeInput-edges-turquoise.txt", header = TRUE, sep = "\t")
+
+# Filter edges containing 'Cre06.g270500' in either 'fromNode' or 'toNode'
+turquoise_gene_of_interest_edges <- turquoise_edges %>%
+  filter(fromNode == "Cre06.g270500" | toNode == "Cre06.g270500")
+
+head(turquoise_gene_of_interest_edges)
+dim(turquoise_gene_of_interest_edges)
+#313 6
+
+write.table(turquoise_gene_of_interest_edges, "anaerobiosis_gse42035_edges_Cre06.g270500.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+
+#---------------------------------------------------------------------
+#Here extracting the edges relating to Cre06.g273100 in the yellow module
+
+library(dplyr)
+
+yellow_edges <- read.table("CytoscapeInput-edges-yellow.txt", header = TRUE, sep = "\t")
+
+# Filter edges containing 'Cre06.g270500' in either 'fromNode' or 'toNode'
+yellow_gene_of_interest_edges <- yellow_edges %>%
+  filter(fromNode == "Cre06.g273100" | toNode == "Cre06.g273100")
+
+head(yellow_gene_of_interest_edges)
+dim(yellow_gene_of_interest_edges)
+#143 6
+
+write.table(yellow_gene_of_interest_edges, "anaerobiosis_gse42035_edges_Cre06.g273100.txt", sep = "\t", row.names = FALSE, quote = FALSE)
