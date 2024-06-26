@@ -701,16 +701,70 @@ for (module in modules) {
 
 #---------------------------------------------------------------------
 #Here extracting the edges relating to Cre07.g317250 in the blue module
-#CODE RAN UP TO HERE
 
-green_edges <- read.table("CytoscapeInput-edges-green.txt", header = TRUE, sep = "\t")
+anaerobiosis_gse42035_blue_module <- read.table("all-anaerobiosis-genes-edges/all-anaerobiosis-genes-edges-blue.txt", header = TRUE, sep = "\t")
 
 # Filter edges containing 'Cre07.g317250' in either 'fromNode' or 'toNode'
-green_gene_of_interest_edges <- green_edges %>%
+cre07.g317250_anaerobiosis_gse42035_blue_module <- anaerobiosis_gse42035_blue_module %>%
   filter(fromNode == "Cre07.g317250" | toNode == "Cre07.g317250")
 
-head(green_gene_of_interest_edges)
-dim(green_gene_of_interest_edges)
-#129 6
+head(cre07.g317250_anaerobiosis_gse42035_blue_module)
+dim(cre07.g317250_anaerobiosis_gse42035_blue_module)
+#2332 6
 
-write.table(green_gene_of_interest_edges, "anaerobiosis_gse42035_edges_Cre07.g317250.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+#Order by weight column in descending order
+cre07.g317250_anaerobiosis_gse42035_blue_module <- cre07.g317250_anaerobiosis_gse42035_blue_module[order(-cre07.g317250_anaerobiosis_gse42035_blue_module$weight), ]
+
+write.table(cre07.g317250_anaerobiosis_gse42035_blue_module, "cre07.g317250_anaerobiosis_gse42035_blue_module.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+
+#---------------------------------------------------------------------
+#Here extracting the edges relating to Cre06.g270500 in the blue module
+
+anaerobiosis_gse42035_blue_module <- read.table("all-anaerobiosis-genes-edges/all-anaerobiosis-genes-edges-blue.txt", header = TRUE, sep = "\t")
+
+# Filter edges containing 'Cre06.g270500' in either 'fromNode' or 'toNode'
+cre06.g270500_anaerobiosis_gse42035_blue_module <- anaerobiosis_gse42035_blue_module %>%
+  filter(fromNode == "Cre06.g270500" | toNode == "Cre06.g270500")
+
+head(cre06.g270500_anaerobiosis_gse42035_blue_module)
+dim(cre06.g270500_anaerobiosis_gse42035_blue_module)
+#2332 6
+#dim values are the same as Cre07.g317250 because they belong to the same module
+#and there are 2332 + 1(gene of interest) nodes in the blue module
+
+cre06.g270500_anaerobiosis_gse42035_blue_module <- cre06.g270500_anaerobiosis_gse42035_blue_module[order(-cre06.g270500_anaerobiosis_gse42035_blue_module$weight), ]
+
+write.table(cre06.g270500_anaerobiosis_gse42035_blue_module, "cre06.g270500_anaerobiosis_gse42035_blue_module.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+
+#---------------------------------------------------------------------
+#Here extracting the edges relating to Cre06.g273100 in the purple module
+
+anaerobiosis_gse42035_purple_module <- read.table("all-anaerobiosis-genes-edges/all-anaerobiosis-genes-edges-purple.txt", header = TRUE, sep = "\t")
+
+# Filter edges containing 'Cre06.g273100' in either 'fromNode' or 'toNode'
+cre06.g273100_anaerobiosis_gse42035_purple_module <- anaerobiosis_gse42035_purple_module %>%
+  filter(fromNode == "Cre06.g273100" | toNode == "Cre06.g273100")
+
+head(cre06.g273100_anaerobiosis_gse42035_purple_module)
+dim(cre06.g273100_anaerobiosis_gse42035_purple_module)
+#1009 6
+
+cre06.g273100_anaerobiosis_gse42035_purple_module <- cre06.g273100_anaerobiosis_gse42035_purple_module[order(-cre06.g273100_anaerobiosis_gse42035_purple_module$weight), ]
+
+write.table(cre06.g273100_anaerobiosis_gse42035_purple_module, "cre06.g273100_anaerobiosis_gse42035_purple_module.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+
+#---------------------------------------------------------------------
+#Extract edges of the top 100 weight
+
+# Extract the top edges until we have X no. of unique genes in the 'toNode' column
+unique_genes_toNode <- unique(cre07.g317250_anaerobiosis_gse42035_blue_module$toNode)
+
+# Check if we have at least 100 unique genes
+if (length(unique_genes_toNode) > 400) {
+  unique_genes_toNode <- unique_genes_toNode[1:400]
+}
+
+# Export the list of unique genes to a new file
+write.table(unique_genes_toNode, "Top400Genes_toNode.txt", sep = "\t", row.names = FALSE, quote = FALSE, col.names = FALSE)
+
+
