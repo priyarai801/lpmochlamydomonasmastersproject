@@ -168,13 +168,13 @@ geneTree <- hclust(as.dist(dissTOM), method = "average")
 plot(geneTree, main = "Gene clustering on TOM-based dissimilarity", sub = "", xlab = "")
 
 # Dynamic tree cut to identify modules
-dynamicMods <- cutreeDynamic(dendro = geneTree, distM = dissTOM, deepSplit = 0, pamRespectsDendro = FALSE)
+dynamicMods <- cutreeDynamic(dendro = geneTree, distM = dissTOM, deepSplit = 2, pamRespectsDendro = FALSE)
 #cutreeDynamic will calculate a cutHeight itself to give a reasonable
 #number of modules
-#set cutHeight to 0.991 ===> 99% of the (truncated) height range in dendro.
+#set cutHeight to 0.993 ===> 99% of the (truncated) height range in dendro.
 
 table(dynamicMods)
-#There are 265 modules?
+#There are 263 modules?
 
 #assigns colours to the modules
 dynamicColors <- labels2colors(dynamicMods)
@@ -183,34 +183,39 @@ dynamicColors <- labels2colors(dynamicMods)
 plotDendroAndColors(geneTree, dynamicColors, "Dynamic Tree Cut", dendroLabels = FALSE, hang = 0.03, addGuide = TRUE, guideHang = 0.05)
 
 #---------------------------------------------------------------------
-#Other code to try and reduce number of modules
+#Other code to try and reduce number of modules - not running this part
+#i'm scared of modules being too big and non-specific
 
-# Adjusted parameters for reducing the number of modules
-deepSplitValue <- 0 # Lower sensitivity to module detection
-cutHeightValue <- 0.991 # keep it to the one CutTreeDynamic chose
-#because it gives a lower number of modules than when i used values closer to 1
-
-# Dynamic tree cut to identify modules
-dynamicMods <- cutreeDynamic(dendro = geneTree, distM = dissTOM, 
-                             deepSplit = deepSplitValue, 
-                             pamRespectsDendro = FALSE,
-                             cutHeight = cutHeightValue)
-
-# Display the resulting module sizes
-moduleSizes <- table(dynamicMods)
-print(moduleSizes)
-
-dynamicColors <- labels2colors(dynamicMods)
-
-# Plotting the dendrogram with the dynamic tree cut
-plotDendroAndColors(geneTree, dynamicMods, "Dynamic Tree Cut",
-                    dendroLabels = FALSE, hang = 0.03,
-                    addGuide = TRUE, guideHang = 0.05)
-
-
+# # Adjusted parameters for reducing the number of modules
+# deepSplitValue <- 0 # Lower sensitivity to module detection
+# cutHeightValue <- 0.991 # keep it to the one CutTreeDynamic chose
+# #because it gives a lower number of modules than when i used values closer to 1
+# 
+# # Dynamic tree cut to identify modules
+# dynamicMods <- cutreeDynamic(dendro = geneTree, distM = dissTOM, 
+#                              deepSplit = deepSplitValue, 
+#                              pamRespectsDendro = FALSE,
+#                              cutHeight = cutHeightValue)
+# 
+# # Display the resulting module sizes
+# moduleSizes <- table(dynamicMods)
+# print(moduleSizes)
+# 
+# #---------------------------------------------------------------------
+# dynamicColors <- labels2colors(dynamicMods)
+# 
+# # Plotting the dendrogram with the dynamic tree cut
+# plotDendroAndColors(geneTree, dynamicMods, "Dynamic Tree Cut",
+#                     dendroLabels = FALSE, hang = 0.03,
+#                     addGuide = TRUE, guideHang = 0.05)
+# 
+# 
 #---------------------------------------------------------------------
 #After module identification you need to summarise the modules by
 #calculating the module eigengenes
+
+#Continue running code here
+dynamicColors <- labels2colors(dynamicMods)
 
 # Calculate module eigengenes
 MEs <- moduleEigengenes(datExpr, colors = dynamicColors)$eigengenes
@@ -241,125 +246,155 @@ head(analysis_gse34826_log_fpkm_data)
 # Transpose the data for WGCNA (genes as columns and samples as rows)
 datExpr <- as.data.frame(t(analysis_gse34826_log_fpkm_data))
 #---------------------------------------------------------------------
-#EROOR HERE - CODE RAN UP TO HERE
-#---------------------------------------------------------------------
-# Ensure that datExpr and dynamicMods have the same row names (gene IDs)
-stopifnot(all(rownames(datExpr) == names(dynamicMods)))
-
-# Create a data frame with gene IDs and their corresponding module colors
-gene_module_assignment <- data.frame(
-  gene_id = names(dynamicMods),
-  module = dynamicColors
-)
-
-# Filter for the genes of interest
-genes_of_interest_modules <- gene_module_assignment %>%
-  filter(gene_id %in% genes_of_interest)
-
-# Display the genes of interest with their assigned modules
-print(genes_of_interest_modules)
 
 #Next step is to relate modules to external/phenotypic traits - i think
 #this is an optional step so unsure at this point to apply this to my
 #network
 
 #---------------------------------------------------------------------
-#To export the network to Cytoscape
-#Exporting all 5 modules to Cytoscape - there is also an option of 
-#exporting just a single module
+#Trying to find out which module the LPMO genes are in
 
-# Select all unique modules
-modules <- unique(dynamicColors)
-probes <- colnames(datExpr)
+# Create a data frame with gene IDs and their corresponding module colors
+gene_module_df <- data.frame(
+  gene_id = rownames(analysis_gse34826_log_fpkm_data),
+  module = dynamicColors
+)
 
-# Loop over each module to export the corresponding network data
-#Takes about a minute
-for (module in modules) {
-  inModule <- (dynamicColors == module)
-  modProbes <- probes[inModule]
-  modTOM <- TOM[inModule, inModule]
-  
-  # Export the edge list for the module
-  exportNetworkToCytoscape(
-    modTOM,
-    edgeFile = paste0("all-anaerobiosis-genes-edges-", module, ".txt"),
-    nodeFile = paste0("all-anaerobiosis-genes-nodes-", module, ".txt"),
-    weighted = TRUE,
-    threshold = 0.02, # Adjust this threshold based on your preference
-    nodeNames = modProbes,
-    nodeAttr = dynamicColors[inModule]
-  )
-}
+# Filter for genes of interest
+genes_of_interest_modules <- gene_module_df %>%
+  filter(gene_id %in% genes_of_interest)
 
-# Cre07.g317250 + Cre06.g270500 are in BLUE module
-# Cre06.g273100 are in PURPLE module
+# Print the results
+print(genes_of_interest_modules)
+
+#Cre07.g317250 lightslateblue module
+#Cre06.g270500 lightcyan module
+#Cre06.g273100 grey60 module
 
 #---------------------------------------------------------------------
-#Here extracting the edges relating to Cre07.g317250 in the blue module
 
-anaerobiosis_gse42035_blue_module <- read.table("all-anaerobiosis-genes-edges/all-anaerobiosis-genes-edges-blue.txt", header = TRUE, sep = "\t")
+#Create dataframe of all the genes in the dataset that are designated
+#to the module of interest
 
-# Filter edges containing 'Cre07.g317250' in either 'fromNode' or 'toNode'
-cre07.g317250_anaerobiosis_gse42035_blue_module <- anaerobiosis_gse42035_blue_module %>%
-  filter(fromNode == "Cre07.g317250" | toNode == "Cre07.g317250")
+#Cre07.g317250 lightslateblue module
+lightslateblue_module_genes <- gene_module_df %>%
+  filter(module == "lightslateblue")
 
-head(cre07.g317250_anaerobiosis_gse42035_blue_module)
-dim(cre07.g317250_anaerobiosis_gse42035_blue_module)
-#2332 6
+#Add in the log FPKM values too
+lightslateblue_module_genes_with_fpkm <- lightslateblue_module_genes %>%
+  left_join(analysis_gse34826_log_fpkm_data %>% rownames_to_column("gene_id"), by = "gene_id")
 
-#Order by weight column in descending order
-cre07.g317250_anaerobiosis_gse42035_blue_module <- cre07.g317250_anaerobiosis_gse42035_blue_module[order(-cre07.g317250_anaerobiosis_gse42035_blue_module$weight), ]
-
-write.table(cre07.g317250_anaerobiosis_gse42035_blue_module, "cre07.g317250_anaerobiosis_gse42035_blue_module.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+write.csv(lightslateblue_module_genes_with_fpkm, "lightslateblue_module_genes_with_fpkm.csv", row.names = FALSE)
 
 #---------------------------------------------------------------------
-#Here extracting the edges relating to Cre06.g270500 in the blue module
 
-anaerobiosis_gse42035_blue_module <- read.table("all-anaerobiosis-genes-edges/all-anaerobiosis-genes-edges-blue.txt", header = TRUE, sep = "\t")
+#Do the same for the other 2 modules
 
-# Filter edges containing 'Cre06.g270500' in either 'fromNode' or 'toNode'
-cre06.g270500_anaerobiosis_gse42035_blue_module <- anaerobiosis_gse42035_blue_module %>%
-  filter(fromNode == "Cre06.g270500" | toNode == "Cre06.g270500")
+#Cre06.g270500 lightcyan module
+lightcyan_module_genes <- gene_module_df %>%
+  filter(module == "lightcyan")
 
-head(cre06.g270500_anaerobiosis_gse42035_blue_module)
-dim(cre06.g270500_anaerobiosis_gse42035_blue_module)
-#2332 6
-#dim values are the same as Cre07.g317250 because they belong to the same module
-#and there are 2332 + 1(gene of interest) nodes in the blue module
+lightcyan_module_genes_with_fpkm <- lightcyan_module_genes %>%
+  left_join(analysis_gse34826_log_fpkm_data %>% rownames_to_column("gene_id"), by = "gene_id")
 
-cre06.g270500_anaerobiosis_gse42035_blue_module <- cre06.g270500_anaerobiosis_gse42035_blue_module[order(-cre06.g270500_anaerobiosis_gse42035_blue_module$weight), ]
-
-write.table(cre06.g270500_anaerobiosis_gse42035_blue_module, "cre06.g270500_anaerobiosis_gse42035_blue_module.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+write.csv(lightcyan_module_genes_with_fpkm, "lightcyan_module_genes_with_fpkm.csv", row.names = FALSE)
 
 #---------------------------------------------------------------------
-#Here extracting the edges relating to Cre06.g273100 in the purple module
 
-anaerobiosis_gse42035_purple_module <- read.table("all-anaerobiosis-genes-edges/all-anaerobiosis-genes-edges-purple.txt", header = TRUE, sep = "\t")
+#Cre06.g273100 grey60 module
+grey60_module_genes <- gene_module_df %>%
+  filter(module == "grey60")
 
-# Filter edges containing 'Cre06.g273100' in either 'fromNode' or 'toNode'
-cre06.g273100_anaerobiosis_gse42035_purple_module <- anaerobiosis_gse42035_purple_module %>%
-  filter(fromNode == "Cre06.g273100" | toNode == "Cre06.g273100")
+grey60_module_genes_with_fpkm <- grey60_module_genes %>%
+  left_join(analysis_gse34826_log_fpkm_data %>% rownames_to_column("gene_id"), by = "gene_id")
 
-head(cre06.g273100_anaerobiosis_gse42035_purple_module)
-dim(cre06.g273100_anaerobiosis_gse42035_purple_module)
-#1009 6
-
-cre06.g273100_anaerobiosis_gse42035_purple_module <- cre06.g273100_anaerobiosis_gse42035_purple_module[order(-cre06.g273100_anaerobiosis_gse42035_purple_module$weight), ]
-
-write.table(cre06.g273100_anaerobiosis_gse42035_purple_module, "cre06.g273100_anaerobiosis_gse42035_purple_module.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+write.csv(grey60_module_genes_with_fpkm, "grey60_module_genes_with_fpkm.csv", row.names = FALSE)
 
 #---------------------------------------------------------------------
-#Extract edges of the top 100 weight
+#For Cre07.g317250 black module can i also have a list of the edges and weight in wgcna
 
-# Extract the top edges until we have X no. of unique genes in the 'toNode' column
-unique_genes_toNode <- unique(cre06.g273100_anaerobiosis_gse42035_purple_module$toNode)
+#---------------------------------------------------------------------
+#Just to get a list of gene_ids for a quick GO enrichment analysis
 
-# Check if we have at least 100 unique genes
-if (length(unique_genes_toNode) > 100) {
-  unique_genes_toNode <- unique_genes_toNode[1:100]
-}
+#Cre07.g317250 lightslateblue module
+lightslateblue_module_gene_ids <- gene_module_df %>%
+  filter(module == "lightslateblue") %>%
+  pull(gene_id)
 
-# Export the list of unique genes to a new file
-write.table(unique_genes_toNode, "Top100Genes_toNode.txt", sep = "\t", row.names = FALSE, quote = FALSE, col.names = FALSE)
+lightslateblue_module_gene_ids <- data.frame(gene_id = lightslateblue_module_gene_ids)
 
+write.csv(lightslateblue_module_gene_ids, "lightslateblue_module_genes_ids.csv", row.names = FALSE)
 
+#---------------------------------------------------------------------
+#seeing if I can do GO analysis here as gprofiler website has limit of
+#100 genes
+
+install.packages("gprofiler2")
+library(gprofiler2)
+
+#Get a list of just the genes for GO analysis
+lightslateblue_module_gene_ids_list <- lightslateblue_module_gene_ids$gene_id
+
+gost_res <- gost(query = lightslateblue_module_gene_ids_list,
+                 organism = "creinhardtii",
+                 ordered_query = FALSE,
+                 multi_query = FALSE,
+                 significant = TRUE,
+                 exclude_iea = FALSE,
+                 measure_underrepresentation = FALSE,
+                 evcodes = TRUE,
+                 user_threshold = 0.05,
+                 correction_method = "g_SCS")
+
+print(gost_res$result)
+#---------------------------------------------------------------------
+#Cre06.g270500 lightcyan module
+
+lightcyan_module_gene_ids <- gene_module_df %>%
+  filter(module == "lightcyan") %>%
+  pull(gene_id)
+
+lightcyan_module_gene_ids <- data.frame(gene_id = lightcyan_module_gene_ids)
+
+write.csv(lightcyan_module_gene_ids, "lightcyan_module_genes_ids.csv", row.names = FALSE)
+
+lightcyan_module_gene_ids_list <- lightcyan_module_gene_ids$gene_id
+
+gost_res <- gost(query = lightcyan_module_gene_ids_list,
+                 organism = "creinhardtii",
+                 ordered_query = FALSE,
+                 multi_query = FALSE,
+                 significant = TRUE,
+                 exclude_iea = FALSE,
+                 measure_underrepresentation = FALSE,
+                 evcodes = TRUE,
+                 user_threshold = 0.05,
+                 correction_method = "g_SCS")
+
+print(gost_res$result)
+
+#---------------------------------------------------------------------
+#Cre06.g273100 grey60 module
+
+grey60_module_gene_ids <- gene_module_df %>%
+  filter(module == "grey60") %>%
+  pull(gene_id)
+
+grey60_module_gene_ids <- data.frame(gene_id = grey60_module_gene_ids)
+
+write.csv(grey60_module_gene_ids, "grey60_module_genes_ids.csv", row.names = FALSE)
+
+grey60_module_gene_ids_list <- grey60_module_gene_ids$gene_id
+
+gost_res <- gost(query = grey60_module_gene_ids_list,
+                 organism = "creinhardtii",
+                 ordered_query = FALSE,
+                 multi_query = FALSE,
+                 significant = TRUE,
+                 exclude_iea = FALSE,
+                 measure_underrepresentation = FALSE,
+                 evcodes = TRUE,
+                 user_threshold = 0.05,
+                 correction_method = "g_SCS")
+
+print(gost_res$result)
