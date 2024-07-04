@@ -103,7 +103,7 @@ analysis_gse34826_log_fpkm_data <- analysis_gse34826_log_fpkm_data %>% column_to
 # Check the structure of the data
 head(analysis_gse34826_log_fpkm_data)
 
-# Transpose the data for WGCNA (genes as columns and samples as rows)
+# Transpose the data for WGCNA (genes as columns and samples as rows)s
 datExpr <- as.data.frame(t(analysis_gse34826_log_fpkm_data))
 
 # Check the transposed data structure
@@ -398,3 +398,100 @@ gost_res <- gost(query = grey60_module_gene_ids_list,
                  correction_method = "g_SCS")
 
 print(gost_res$result)
+
+#---------------------------------------------------------------------
+#CODE RAN UP TO HERE
+#---------------------------------------------------------------------
+
+#Trying to get a list of all the edges and modules and weights in 
+# analysis_gse34826_log_fpkm_data so that they can be entered into
+#cytoscape to create a weighted gene coexpression network
+
+# 1. Extracting the adjacency matrix and module assignments
+#this part's already been run previously - but wouldn't hurt to run
+#again I suppose
+adjacency <- adjacency(datExpr, power = softPower)
+TOM <- TOMsimilarity(adjacency)
+dissTOM <- 1 - TOM
+
+# 2. Convert the adjacency matrix to an edge list
+threshold <- 0.1  # You can adjust this threshold to filter edges by weight
+adjacency[adjacency < threshold] <- 0
+#takes a minute
+
+# Create edge list from adjacency matrix
+library(reshape2)
+edge_list <- melt(adjacency)
+colnames(edge_list) <- c("Source", "Target", "Weight")
+edge_list <- edge_list[edge_list$Weight > 0, ]
+
+# Save edge list to CSV - takes a minute
+write.csv(edge_list, "edge_list.csv", row.names = FALSE)
+
+head(edge_list)
+str(edge_list)
+
+#Network is way too unprecedently big to visualise in Cytoscape so now
+#going to visualise each module with the LPMO gene in
+
+#---------------------------------------------------------------------
+
+#Getting list of edges and weights for visualisation in cytoscape
+#for lightslateblue module for Cre07.g317250
+
+#----------------
+# Ensure gene_id is set as row names
+analysis_gse34826_log_fpkm_data <- analysis_gse34826_log_fpkm_data %>% 
+  column_to_rownames("gene_id")
+
+# Transpose the data for WGCNA (genes as columns and samples as rows)
+datExpr <- as.data.frame(t(analysis_gse34826_log_fpkm_data))
+
+# Check the structure of the transposed data
+str(datExpr)
+dim(datExpr)
+
+# Construct adjacency matrix
+softPower <- 18
+adjacency <- adjacency(datExpr, power = softPower)
+
+# Convert adjacency to topological overlap matrix (TOM)
+TOM <- TOMsimilarity(adjacency)
+
+# Ensure that the dimnames for TOM are set correctly
+gene_ids <- colnames(datExpr)  # gene_ids should now be the column names of datExpr
+dimnames(TOM) <- list(gene_ids, gene_ids)
+
+#-----------------
+# Extract genes in the lightslateblue module
+lightslateblue_module_genes <- gene_module_df %>%
+  filter(module == "lightslateblue")
+
+# Extract the gene IDs in the lightslateblue module
+lightslateblue_gene_ids <- lightslateblue_module_genes$gene_id
+
+# Subset the TOM for the lightslateblue genes
+TOM_lightslateblue <- TOM[lightslateblue_gene_ids, lightslateblue_gene_ids]
+
+# Check if TOM_lightslateblue is not empty
+if (dim(TOM_lightslateblue)[1] == 0) {
+  stop("The TOM subset is empty. Check the gene IDs and TOM matrix.")
+}
+
+# Convert the TOM to an edge list
+threshold <- 0.1  # Set a threshold to filter edges by weight
+TOM_lightslateblue[TOM_lightslateblue < threshold] <- 0
+
+library(reshape2)
+edge_list_lightslateblue <- melt(TOM_lightslateblue)
+colnames(edge_list_lightslateblue) <- c("Source", "Target", "Weight")
+edge_list_lightslateblue <- edge_list_lightslateblue[edge_list_lightslateblue$Weight > 0, ]
+
+edge_list_lightslateblue <- edge_list_lightslateblue %>%
+  filter(Weight > 0 & Weight < 1)
+
+# Save the edge list to CSV
+write.csv(edge_list_lightslateblue, "lightslateblue_edge_list.csv", row.names = FALSE)
+
+#-----------------
+#
