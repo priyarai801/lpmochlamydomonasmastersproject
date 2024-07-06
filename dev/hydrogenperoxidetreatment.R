@@ -400,8 +400,6 @@ gost_res <- gost(query = grey60_module_gene_ids_list,
 print(gost_res$result)
 
 #---------------------------------------------------------------------
-#CODE RAN UP TO HERE
-#---------------------------------------------------------------------
 
 #Trying to get a list of all the edges and modules and weights in 
 # analysis_gse34826_log_fpkm_data so that they can be entered into
@@ -439,7 +437,7 @@ str(edge_list)
 #Getting list of edges and weights for visualisation in cytoscape
 #for lightslateblue module for Cre07.g317250
 
-#----------------
+#---------------------------------------------------------------------
 # Ensure gene_id is set as row names
 analysis_gse34826_log_fpkm_data <- analysis_gse34826_log_fpkm_data %>% 
   column_to_rownames("gene_id")
@@ -462,7 +460,7 @@ TOM <- TOMsimilarity(adjacency)
 gene_ids <- colnames(datExpr)  # gene_ids should now be the column names of datExpr
 dimnames(TOM) <- list(gene_ids, gene_ids)
 
-#-----------------
+#---------------------------------------------------------------------
 # Extract genes in the lightslateblue module
 lightslateblue_module_genes <- gene_module_df %>%
   filter(module == "lightslateblue")
@@ -494,4 +492,88 @@ edge_list_lightslateblue <- edge_list_lightslateblue %>%
 write.csv(edge_list_lightslateblue, "lightslateblue_edge_list.csv", row.names = FALSE)
 
 #-----------------
-#
+#list of edges related to Cre07.g317250 as well as weights
+
+filtered_edge_list_lightslateblue <- edge_list_lightslateblue %>%
+  filter(Source == "Cre07.g317250" | Target == "Cre07.g317250")
+
+filtered_edge_list_lightslateblue <- filtered_edge_list_lightslateblue %>%
+  arrange(desc(Weight))
+
+write.csv(filtered_edge_list_lightslateblue, "filtered_lightslateblue_edge_list.csv", row.names = FALSE)
+
+#--------------------------------------------------------------------
+#Cre06.g270500 lightcyan module 
+#list of edges related to Cre06.g270500 as well as weights
+
+lightcyan_module_genes <- gene_module_df %>%
+  filter(module == "lightcyan")
+
+lightcyan_gene_ids <- lightcyan_module_genes$gene_id
+
+TOM_lightcyan <- TOM[lightcyan_gene_ids, lightcyan_gene_ids]
+
+if (dim(TOM_lightcyan)[1] == 0) {
+  stop("The TOM subset is empty. Check the gene IDs and TOM matrix.")
+}
+
+
+threshold <- 0.1
+TOM_lightcyan[TOM_lightcyan < threshold] <- 0
+
+library(reshape2)
+edge_list_lightcyan <- melt(TOM_lightcyan)
+colnames(edge_list_lightcyan) <- c("Source", "Target", "Weight")
+edge_list_lightcyan <- edge_list_lightcyan[edge_list_lightcyan$Weight > 0, ]
+
+edge_list_lightcyan <- edge_list_lightcyan %>%
+  filter(Weight > 0 & Weight < 1)
+
+write.csv(edge_list_lightcyan, "lightcyan_edge_list.csv", row.names = FALSE)
+
+#list of edges related to Cre06.g270500 as well as weights
+
+filtered_edge_list_lightcyan <- edge_list_lightcyan %>%
+  filter(Source == "Cre06.g270500" | Target == "Cre06.g270500")
+
+filtered_edge_list_lightcyan <- filtered_edge_list_lightcyan %>%
+  arrange(desc(Weight))
+
+write.csv(filtered_edge_list_lightcyan, "filtered_lightcyan_edge_list.csv", row.names = FALSE)
+
+#---------------------------------------------------------------------
+#Cre06.g273100 grey60 module
+
+grey60_module_genes <- gene_module_df %>%
+  filter(module == "grey60")
+
+grey60_gene_ids <- grey60_module_genes$gene_id
+
+TOM_grey60 <- TOM[grey60_gene_ids, grey60_gene_ids]
+
+if (dim(TOM_grey60)[1] == 0) {
+  stop("The TOM subset is empty. Check the gene IDs and TOM matrix.")
+}
+
+threshold <- 0.1
+TOM_grey60n[TOM_grey60 < threshold] <- 0
+
+library(reshape2)
+edge_list_grey60 <- melt(TOM_grey60)
+colnames(edge_list_grey60) <- c("Source", "Target", "Weight")
+edge_list_grey60 <- edge_list_grey60[edge_list_grey60$Weight > 0, ]
+
+edge_list_grey60 <- edge_list_grey60 %>%
+  filter(Weight > 0 & Weight < 1)
+
+write.csv(edge_list_grey60, "grey60_edge_list.csv", row.names = FALSE)
+
+#list of edges related to Cre06.g273100 as well as weights
+
+filtered_edge_list_grey60 <- edge_list_grey60 %>%
+  filter(Source == "Cre06.g273100" | Target == "Cre06.g273100")
+
+filtered_edge_list_grey60 <- filtered_edge_list_grey60 %>%
+  arrange(desc(Weight))
+
+write.csv(filtered_edge_list_grey60, "filtered_grey60_edge_list.csv", row.names = FALSE)
