@@ -58,6 +58,44 @@ head(filtered_genes)
 dim(filtered_genes)
 
 #---------------------------------------------------------------------
+#create plot of filtered genes
+
+# Calculate averages and standard errors
+filtered_genes <- filtered_genes %>%
+  rowwise() %>%
+  mutate(
+    avg_0h = mean(c(SRR394058_FPKM, SRR394059_FPKM)),
+    avg_0_5h = mean(c(SRR394060_FPKM, SRR394061_FPKM)),
+    avg_1h = mean(c(SRR394062_FPKM, SRR394063_FPKM)),
+    se_0h = sd(c(SRR394058_FPKM, SRR394059_FPKM)) / sqrt(2),
+    se_0_5h = sd(c(SRR394060_FPKM, SRR394061_FPKM)) / sqrt(2),
+    se_1h = sd(c(SRR394062_FPKM, SRR394063_FPKM)) / sqrt(2)
+  )
+
+# Reshape data for plotting
+plot_filtered_genes <- filtered_genes %>%
+  select(gene_id, avg_0h, avg_0_5h, avg_1h, se_0h, se_0_5h, se_1h) %>%
+  pivot_longer(cols = starts_with("avg_"), names_to = "timepoint", values_to = "average") %>%
+  pivot_longer(cols = starts_with("se_"), names_to = "se_timepoint", values_to = "se") %>%
+  filter(
+    (timepoint == "avg_0h" & se_timepoint == "se_0h") |
+      (timepoint == "avg_0_5h" & se_timepoint == "se_0_5h") |
+      (timepoint == "avg_1h" & se_timepoint == "se_1h")
+  )
+
+# Plot the data
+ggplot(plot_filtered_genes, aes(x = gene_id, y = average, fill = timepoint)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin = average - se, ymax = average + se), position = position_dodge(1), width = 0.25) +
+  labs(
+    title = "Expression of LPMO-containing Genes",
+    x = "Gene ID",
+    y = "Log2(FPKM + 1) Gene Expression",
+    fill = "Timepoint"
+  ) +
+  theme_minimal()
+
+#---------------------------------------------------------------------
 #now trying to make WGCNA
 
 library(WGCNA)
@@ -577,3 +615,33 @@ filtered_edge_list_grey60 <- filtered_edge_list_grey60 %>%
   arrange(desc(Weight))
 
 write.csv(filtered_edge_list_grey60, "filtered_grey60_edge_list.csv", row.names = FALSE)
+
+#---------------------------------------------------------------------
+#Test - calculating coexpression without forming modules
+#NEVERMIND - file is crazy big
+
+library(dplyr)
+library(readr)
+library(reshape2)
+library(igraph)
+
+
+# Calculate the correlation matrix
+cor_matrix <- cor(datExpr, use = "pairwise.complete.obs", method = "pearson")
+
+# Set a threshold for significant correlations (e.g., absolute correlation > 0.8)
+threshold <- 0.8
+
+# Convert correlation matrix to a long format data frame
+cor_df <- melt(cor_matrix, varnames = c("Gene1", "Gene2"), value.name = "Correlation")
+#takes a min
+
+# Filter for significant correlations involving Cre07.g317250
+filtered_cor_df <- cor_df %>%
+  filter((Gene1 == "Cre07.g317250" | Gene2 == "Cre07.g317250") & abs(Correlation) > threshold)
+
+# Display the filtered correlations
+print(filtered_cor_df)
+head(cor_df)
+
+write.csv(cor_df, "cor_df.csv", row.names = FALSE)
