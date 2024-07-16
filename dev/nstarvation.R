@@ -223,7 +223,7 @@ dynamicMods <- cutreeDynamic(dendro = geneTree, distM = dissTOM, deepSplit = 2, 
 #set cutHeight to 0.985 ===> 99% of the (truncated) height range in dendro.
 
 table(dynamicMods)
-#There are 197 modules?
+#There are 197 modules
 
 #assigns colours to the modules
 dynamicColors <- labels2colors(dynamicMods)
@@ -471,3 +471,95 @@ filtered_edge_list_darkviolet <- filtered_edge_list_darkviolet %>%
   arrange(desc(Weight))
 
 write.csv(filtered_edge_list_darkviolet, "filtered_darkviolet_edge_list.csv", row.names = FALSE)
+
+
+#---------------------------------------------------------------------
+#code to see what modules the genes from 2012 paper are in -
+#REMEMBER to convert back the genes_of_interest to the 3 LPMO genes
+
+# List of genes of interest
+genes_of_interest <- c("Cre07.g317250", "Cre06.g270500", "Cre06.g273100")
+
+genes_of_interest <- c("Cre07.g317250", "Cre06.g270500", "Cre06.g273100",
+                       "Cre07.g320850", "Cre03.g171050", "Cre17.g730600",
+                       "Cre17.g730550", "Cre08.g379450", "Cre19.g752200",
+                       "Cre01.g048350", "Cre02.g098000", "Cre07.g343950",
+                       "Cre12.g492800", "Cre07.g337750", "Cre03.g170700",
+                       "Cre03.g173100", "Cre02.g115950", "Cre01.g026250",
+                       "Cre12.g556350", "Cre03.g194700", "Cre03.g190500",
+                       "Cre12.g488000", "Cre12.g488050", "Cre12.g501900",
+                       "Cre12.g501850", "Cre12.g507029", "Cre13.g582300",
+                       "Cre10.g437950", "Cre02.g141600", "Cre07.g336600",
+                       "Cre06.g301600", "Cre13.g579750", "Cre12.g513400",
+                       "Cre07.g314850")
+
+# Filter for genes of interest
+genes_of_interest_modules <- gene_module_df %>%
+  filter(gene_id %in% genes_of_interest)
+
+# Print the results
+print(genes_of_interest_modules)
+
+#---------------------------------------------------------------------
+#code to make a heatmap to see how similar module eigengenes are
+# Assuming you have the module eigengenes (MEs) calculated from WGCNA
+
+
+#---------------------------------------------------------------------
+#with the fastqfiles trying to diy
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+
+BiocManager::install(c("ShortRead", "Rsamtools"))
+
+#---------------------------------------------------------------------
+#added list of genes from phycocosm to see if these genes are also in
+#the same modules as LPMO genes bcos GO annotation wasn't good
+#at picking out LPMO-function related modules
+
+genes_of_interest <- c(
+  "Cre01.g002787", "Cre01.g026250", "Cre01.g031500", "Cre01.g044100", "Cre01.g048350",
+  "Cre02.g087700", "Cre02.g091750", "Cre02.g095126", "Cre02.g096100", "Cre02.g098000",
+  "Cre02.g098350", "Cre02.g112400", "Cre02.g115950", "Cre02.g141600", "Cre03.g146727",
+  "Cre03.g146747", "Cre03.g146767", "Cre03.g148201", "Cre03.g151000", "Cre03.g152050",
+  "Cre03.g155001", "Cre03.g158050", "Cre03.g163050", "Cre03.g163150", "Cre03.g170700",
+  "Cre03.g171050", "Cre03.g173100", "Cre03.g181500", "Cre03.g189050", "Cre03.g190500",
+  "Cre03.g194700", "Cre03.g195600", "Cre03.g200655", "Cre03.g207713", "Cre05.g233304",
+  "Cre05.g243450", "Cre05.g245352", "Cre06.g267050", "Cre06.g269601", "Cre06.g269650",
+  "Cre06.g270100", "Cre06.g270350", "Cre06.g270500", "Cre06.g273100", "Cre06.g278252",
+  "Cre06.g282000", "Cre06.g283400", "Cre06.g285150", "Cre06.g289850", "Cre06.g301600",
+  "Cre06.g306000", "Cre06.g307150", "Cre06.g307650", "Cre07.g314850", "Cre07.g314866",
+  "Cre07.g317250", "Cre07.g319300", "Cre07.g320850", "Cre07.g332300", "Cre07.g336600",
+  "Cre07.g337750", "Cre07.g338550", "Cre07.g339600", "Cre07.g343933", "Cre07.g343950",
+  "Cre08.g362450", "Cre08.g373450", "Cre08.g379450", "Cre08.g384750", "Cre08.g385500",
+  "Cre09.g386137", "Cre09.g387100", "Cre09.g393765", "Cre09.g394473", "Cre09.g394510",
+  "Cre09.g394547", "Cre09.g396451", "Cre09.g401886", "Cre09.g407501", "Cre09.g415600",
+  "Cre10.g437950", "Cre10.g444700", "Cre10.g447550", "Cre10.g450500", "Cre10.g451600",
+  "Cre10.g455950", "Cre10.g456000", "Cre10.g456050", "Cre10.g456100", "Cre10.g457500",
+  "Cre10.g458350", "Cre11.g467538", "Cre11.g467539", "Cre11.g467540", "Cre11.g467779",
+  "Cre11.g476650", "Cre11.g478184", "Cre12.g488000", "Cre12.g488050", "Cre12.g492750",
+  "Cre12.g492800", "Cre12.g492851", "Cre12.g501850", "Cre12.g501900", "Cre12.g507029",
+  "Cre12.g507051", "Cre12.g509200", "Cre12.g513400", "Cre12.g514200", "Cre12.g551200",
+  "Cre12.g556350", "Cre13.g570700", "Cre13.g577300", "Cre13.g579582", "Cre13.g579734",
+  "Cre13.g579750", "Cre13.g582250", "Cre13.g582270", "Cre13.g582300", "Cre13.g587600",
+  "Cre14.g631300", "Cre16.g653350", "Cre16.g657200", "Cre16.g657250", "Cre16.g666334",
+  "Cre16.g667100", "Cre16.g677300", "Cre16.g693950", "Cre17.g696900", "Cre17.g698850",
+  "Cre17.g703000", "Cre17.g719900", "Cre17.g730550", "Cre17.g730600", "Cre17.g732350",
+  "Cre17.g732600", "Cre19.g752200")
+
+# Filter for genes of interest
+genes_of_interest_modules <- gene_module_df %>%
+  filter(gene_id %in% genes_of_interest)
+
+print(genes_of_interest_modules)
+
+write.csv(genes_of_interest_modules, "genes_of_interest_modules_137.csv", row.names = FALSE)
+
+# Filter out the genes that belong to the specified modules
+filtered_genes_of_interest_modules <- genes_of_interest_modules %>%
+  filter(module %in% c("blue", "brown", "darkviolet"))
+
+print(filtered_genes_of_interest_modules)
+
+write.csv(filtered_genes_of_interest_modules, "filtered_genes_of_interest_modules.csv", row.names = FALSE)
