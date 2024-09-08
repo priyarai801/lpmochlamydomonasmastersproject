@@ -1,38 +1,34 @@
-getwd()
-setwd("/Users/priyarai/Documents/Researchproject/data/nconcentration")
 
-#--------------------------------------------------------------------
-#For WGCNA
-
+#Load the following libraries for analysis
 library(WGCNA)
 library(dplyr)
 library(ggplot2)
 library(tidyr)
 library(readr)
 
-#i've got the GSE34585 FPKM tracking data from Phytozome
 
+#Read in the FPKM data obtained from Phytozome
 gse34585_fpkm_data <- read_tsv("GSE34585_genes.fpkm_tracking")
 
 head(gse34585_fpkm_data)
 dim(gse34585_fpkm_data)
 
-#in gse34585_fpkm_data I have 17,741 genes
+#The gse34585_fpkm_data contains 17,741 genes
 
-#in gse34585_fpkm_data I want columns: 
-# 4 (gene_id)
+#In gse34585_fpkm_data I want columns: 
+# columns 4 (gene_id)
 
-# 82 SRR393780_FPKM Nitrogen deficiency t=0 (1)
-# 34 SRR393781_FPKM Nitrogen deficiency t=0 (2)
+# columns 82 SRR393780_FPKM Nitrogen deficiency t=0 (1)
+# columns 34 SRR393781_FPKM Nitrogen deficiency t=0 (2)
 # 
-# 86 SRR393782_FPKM Nitrogen deficiency t=30m (1)
-# 38 SRR393783_FPKM Nitrogen deficiency t=30m (2)
+# columns 86 SRR393782_FPKM Nitrogen deficiency t=30m (1)
+# columns 38 SRR393783_FPKM Nitrogen deficiency t=30m (2)
 # 
-# 90 SRR393784_FPKM Nitrogen deficiency t=4h (1)
-# 42 SRR393785_FPKM Nitrogen deficiency t=4h (2)
+# columns 90 SRR393784_FPKM Nitrogen deficiency t=4h (1)
+# columns 42 SRR393785_FPKM Nitrogen deficiency t=4h (2)
 # 
-# 94 SRR393786_FPKM Nitrogen deficiency t=8h(1)
-# 46 SRR393787_FPKM Nitrogen deficiency t=8h (2)
+# columns 94 SRR393786_FPKM Nitrogen deficiency t=8h(1)
+# columns 46 SRR393787_FPKM Nitrogen deficiency t=8h (2)
 
 analysis_gse34585_fpkm_data <- gse34585_fpkm_data %>%
   select(gene_id = 4, SRR393780_FPKM = 82, SRR393781_FPKM = 34, SRR393782_FPKM = 86, SRR393783_FPKM = 38, 
@@ -45,7 +41,7 @@ dim(analysis_gse34585_fpkm_data)
 write.csv(analysis_gse34585_fpkm_data, "analysis_gse34585_fpkm_data.csv", row.names = FALSE)
 
 #---------------------------------------------------------------------
-# Log-transform the FPKM values (adding a small constant to avoid log(0))
+# Log-transform the FPKM values
 analysis_gse34585_log_fpkm_data <- analysis_gse34585_fpkm_data %>%
   mutate(across(starts_with("SRR"), ~ log2(. + 1)))
 
@@ -54,7 +50,7 @@ dim(analysis_gse34585_log_fpkm_data)
 #17741 9
 #---------------------------------------------------------------------
 
-#Just a table of genes of interest
+#Create a vector containing just the LPMO-containing proteins
 
 genes_of_interest <- c("Cre07.g317250", "Cre06.g270500", "Cre06.g273100")
 
@@ -65,9 +61,9 @@ head(filtered_genes)
 dim(filtered_genes)
 
 #---------------------------------------------------------------------
-#create plot of filtered genes
+#Create plot to look at gene expression levels of the LPMO-containing proteins
 
-# Calculate averages and standard errors - they're not yet defined 
+# Calculate the average and standard error values
 filtered_genes <- filtered_genes %>%
   rowwise() %>%
   mutate(
@@ -81,7 +77,7 @@ filtered_genes <- filtered_genes %>%
     se_8h = sd(c(SRR393786_FPKM, SRR393787_FPKM)) / sqrt(2)
   )
 
-# Reshape data for plotting
+
 plot_filtered_genes <- filtered_genes %>%
   select(gene_id, avg_0h, avg_0_5h, avg_4h, avg_8h, se_0h, se_0_5h, se_4h, se_8h) %>%
   pivot_longer(cols = starts_with("avg_"), names_to = "timepoint", values_to = "average") %>%
@@ -93,50 +89,73 @@ plot_filtered_genes <- filtered_genes %>%
       (timepoint == "avg_8h" & se_timepoint == "se_8h")
   )
 
-# Plot the data
+plot_filtered_genes <- plot_filtered_genes %>%
+  mutate(timepoint = factor(timepoint, levels = c("avg_0h", "avg_0_5h", "avg_4h", "avg_8h"),
+                            labels = c("0h", "0.5h", "4h", "8h")))
+
+#Code to plot the data
 ggplot(plot_filtered_genes, aes(x = gene_id, y = average, fill = timepoint)) +
   geom_bar(stat = "identity", position = "dodge") +
   geom_errorbar(aes(ymin = average - se, ymax = average + se), position = position_dodge(1), width = 0.25) +
   labs(
-    title = "Expression of LPMO-containing Genes",
-    x = "Gene ID",
-    y = "Log2(FPKM + 1) Gene Expression",
-    fill = "Timepoint"
+    title = expression("Expression Of LPMO-Containing Genes in " * italic("C. reinhardtii")),
+    x = "Gene",
+    y = "Normalised Gene Expression (Log FPKM)",
+    fill = "Time After Nitrogen Deprivation"
   ) +
   theme_minimal()
 
 #---------------------------------------------------------------------
-#now trying to make WGCNA
+#Code to carry out pairwise t-test testing
+
+
+perform_pairwise_t_test <- function(gene_data, gene_name) {
+  expression_values <- unlist(gene_data[2:9])
+  time_points <- factor(rep(c("0h", "0h", "0.5h", "0.5h", "4h", "4h", "8h", "8h"), times = 1))
+  
+  pairwise_results <- pairwise.t.test(expression_values, time_points, p.adjust.method = "bonferroni")
+  
+  cat("Pairwise t-test results for", gene_name, ":\n")
+  print(pairwise_results)
+}
+
+#Conducts parwise t-test on the LPMO-containing genes
+perform_pairwise_t_test(filtered_genes[filtered_genes$gene_id == "Cre06.g270500", ], "Cre06.g270500")
+perform_pairwise_t_test(filtered_genes[filtered_genes$gene_id == "Cre06.g273100", ], "Cre06.g273100")
+perform_pairwise_t_test(filtered_genes[filtered_genes$gene_id == "Cre07.g317250", ], "Cre07.g317250")
+
+
+#---------------------------------------------------------------------
+#Load libraries for WGCNA analysis if not already done so
 
 library(WGCNA)
 library(dplyr)
 library(readr)
 library(tibble)
 
-#---------------------------------------------------------------------
-#when running the pickSoftThreshold the 0s are causing the NA so
-#need to remove them
+#----------------------------------------------------------------------
+#Begin WGCNA Analysis by removing rows with 0 values
 
-# Display column names to verify
+#Check column names in the analysis_gse34585_log_fpkm_data
 print(names(analysis_gse34585_log_fpkm_data))
 
-# Define the columns of interest based on the actual column names
+
 columns_of_interest <- c("SRR393780_FPKM", "SRR393781_FPKM", "SRR393782_FPKM", "SRR393783_FPKM", "SRR393784_FPKM", 
                          "SRR393785_FPKM", "SRR393786_FPKM", "SRR393787_FPKM")
 
-# Verify that the columns exist in the dataframe
+
 missing_columns <- setdiff(columns_of_interest, names(analysis_gse34585_log_fpkm_data))
 if (length(missing_columns) > 0) {
   stop("The following columns are missing in the dataframe: ", paste(missing_columns, collapse = ", "))
 }
 
-# Convert the specified columns to numeric
+
 analysis_gse34585_log_fpkm_data[columns_of_interest] <- lapply(analysis_gse34585_log_fpkm_data[columns_of_interest], as.numeric)
 
-# Create a logical condition to identify rows where all specified columns have a value of 0
+
 rows_with_all_zeros <- apply(analysis_gse34585_log_fpkm_data[columns_of_interest], 1, function(row) all(row == 0))
 
-# Print the number of rows identified
+
 cat("Number of rows with all zeros in the specified columns:", sum(rows_with_all_zeros), "\n")
 # Number of rows with all zeros in the specified columns: 529
 
@@ -146,100 +165,69 @@ analysis_gse34585_log_fpkm_data <- analysis_gse34585_log_fpkm_data[!rows_with_al
 cat("Dimensions after filtering:", dim(analysis_gse34585_log_fpkm_data), "\n")
 #Dimensions after filtering: 17212 9
 
-# Ensure gene_id is set as row names
+
 analysis_gse34585_log_fpkm_data <- analysis_gse34585_log_fpkm_data %>% column_to_rownames("gene_id")
 
-# Check the structure of the data
+
 head(analysis_gse34585_log_fpkm_data)
 
-# Transpose the data for WGCNA (genes as columns and samples as rows)s
+
 datExpr <- as.data.frame(t(analysis_gse34585_log_fpkm_data))
 
-# Check the transposed data structure
+
 str(datExpr)
 dim(datExpr)
-
 #8 17212
+
+#---------------------------------------------------------------------
+#Continue WGCNA analysis by selecting a soft threshold power
 
 powers <- c(1:10, seq(from = 12, to = 50, by = 2))
 
 sft <- pickSoftThreshold(datExpr, powerVector = powers, verbose = 5)
-#Takes about a minute
+
 
 write.csv(analysis_gse34585_log_fpkm_data, "analysis_gse34585_log_fpkm_data.csv", row.names = TRUE)
 
-#Next step is to visualise the results from the pickSoftThreshold function
-
-# Plot the results
-sizeGrWindow(9, 5)
-par(mfrow = c(1, 2))
-
-# Scale-free topology fit index as a function of the soft-thresholding power
-plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
-     xlab="Soft Threshold (power)", ylab="Scale Free Topology Model Fit, signed R^2", type="n", 
-     main = "Scale independence")
-text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2], labels=powers, cex=0.9, col="red")
-
-# Mean connectivity as a function of the soft-thresholding power
-plot(sft$fitIndices[,1], sft$fitIndices[,5], 
-     xlab="Soft Threshold (power)", ylab="Mean Connectivity", type="n", 
-     main = "Mean connectivity")
-text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=0.9, col="red")
-
 #--------------------------------------------------------------------
-
-#Going with power 8 with SFT.R.sq as 0.93, first above 0.9
-
-# Set the soft threshold power
+# Set the soft threshold power as 8
 softPower <- 8
 
-# Construct the adjacency matrix
+# Create the adjacency matrix
 adjacency <- adjacency(datExpr, power = softPower)
-#This line takes about a minute
 dim(adjacency)
 #17212 17212
-#calculates it for 17212 genes x 17212 genes hence why there are
-#nearly 300,000,000 elements
 
-# Turn adjacency into topological overlap matrix (TOM)
+
+# Convert the adjacency matrix into topological overlap matrix (TOM)
 TOM <- TOMsimilarity(adjacency)
 dim(TOM)
 #17212 17212
-#Takes about a minute
 
+#Create a dissimilarity TOM matrix
 dissTOM <- 1 - TOM
 #Takes about a minute
-#in this matrix values of 0 mean very similar whereas 1 not similar at all
+
 
 # Hierarchical clustering of the genes
 geneTree <- hclust(as.dist(dissTOM), method = "average")
-#Takes about a minute
-plot(geneTree, main = "Gene clustering on TOM-based dissimilarity", sub = "", xlab = "")
 
 # Dynamic tree cut to identify modules
 dynamicMods <- cutreeDynamic(dendro = geneTree, distM = dissTOM, deepSplit = 2, pamRespectsDendro = FALSE)
-#cutreeDynamic will calculate a cutHeight itself to give a reasonable
-#number of modules
 #set cutHeight to 0.985 ===> 99% of the (truncated) height range in dendro.
 
 table(dynamicMods)
-#There are 197 modules
+#There are 197 modules in the network
 
-#assigns colours to the modules
+#assigns unique colours to each module
 dynamicColors <- labels2colors(dynamicMods)
-
-# Plot the dendrogram and the module colors
-plotDendroAndColors(geneTree, dynamicColors, "Dynamic Tree Cut", dendroLabels = FALSE, hang = 0.03, addGuide = TRUE, guideHang = 0.05)
 
 
 #---------------------------------------------------------------------
-#After module identification you need to summarise the modules by
-#calculating the module eigengenes
+#Calculate the module eigengene which is a summary of the overall gene expression profile of all the genes
+#within a module
 
-#Continue running code here
-dynamicColors <- labels2colors(dynamicMods)
 
-# Calculate module eigengenes
 MEs <- moduleEigengenes(datExpr, colors = dynamicColors)$eigengenes
 
 # Calculate the dissimilarity of module eigengenes
@@ -248,33 +236,19 @@ MEDiss <- 1 - cor(MEs)
 # Cluster module eigengenes
 METree <- hclust(as.dist(MEDiss), method = "average")
 
-# Plot the module eigengene dendrogram
-plot(METree, main = "Clustering of module eigengenes", xlab = "", sub = "")
 #---------------------------------------------------------------------
 
-#Code to find module colour of genes of interest
+#Code to find the colour of the modules associated with the LPMO-containing proteinsm
 
-# Assuming you have already run the WGCNA steps and have the dynamicMods and dynamicColors
 
-# List of genes of interest
 genes_of_interest <- c("Cre07.g317250", "Cre06.g270500", "Cre06.g273100")
 
-# Ensure gene_id is set as row names
+
 analysis_gse34585_log_fpkm_data <- analysis_gse34585_log_fpkm_data %>% column_to_rownames("gene_id")
 
-# Check the structure of the data
 head(analysis_gse34585_log_fpkm_data)
 
-# Transpose the data for WGCNA (genes as columns and samples as rows)
 datExpr <- as.data.frame(t(analysis_gse34585_log_fpkm_data))
-#---------------------------------------------------------------------
-
-#Next step is to relate modules to external/phenotypic traits - i think
-#this is an optional step so unsure at this point to apply this to my
-#network
-
-#---------------------------------------------------------------------
-#Trying to find out which module the LPMO genes are in
 
 # Create a data frame with gene IDs and their corresponding module colors
 gene_module_df <- data.frame(
@@ -286,53 +260,54 @@ gene_module_df <- data.frame(
 genes_of_interest_modules <- gene_module_df %>%
   filter(gene_id %in% genes_of_interest)
 
-# Print the results
 print(genes_of_interest_modules)
 
-#---------------------------------------------------------------------
+#Here are the colour of the modules of interest:
 #Cre07.g317250 brown
 #Cre06.g270500 darkviolet
 #Cre06.g273100 blue
 
-#Create dataframe of all the genes in the dataset that are designated
-#to the module of interest
 
-#Cre07.g317250 brown module
+#Create a dataframe of all the genes in the brown module associated with the
+#LPMO-containing protein Cre07.g317250 with the log10 FPKM values
+
 brown_module_genes <- gene_module_df %>%
   filter(module == "brown")
 
-#Add in the log FPKM values too
 brown_module_genes_with_fpkm <- brown_module_genes %>%
   left_join(analysis_gse34585_log_fpkm_data %>% rownames_to_column("gene_id"), by = "gene_id")
 
 write.csv(brown_module_genes_with_fpkm, "brown_module_genes_with_fpkm.csv", row.names = FALSE)
 
 #---------------------------------------------------------------------
-#Cre06.g270500 darkviolet
+#Create a dataframe of all the genes in the darkviolet module associated with the
+#LPMO-containing protein Cre06.g270500 with the log10 FPKM values
+
 darkviolet_module_genes <- gene_module_df %>%
   filter(module == "darkviolet")
 
-#Add in the log FPKM values too
 darkviolet_module_genes_with_fpkm <- darkviolet_module_genes %>%
   left_join(analysis_gse34585_log_fpkm_data %>% rownames_to_column("gene_id"), by = "gene_id")
 
 write.csv(darkviolet_module_genes_with_fpkm, "darkviolet_module_genes_with_fpkm.csv", row.names = FALSE)
 
 #---------------------------------------------------------------------
-#Cre06.g273100 blue
+#Create a dataframe of all the genes in the blue module associated with the
+#LPMO-containing protein Cre06.g273100with the log10 FPKM values
+
 blue_module_genes <- gene_module_df %>%
   filter(module == "blue")
 
-#Add in the log FPKM values too
 blue_module_genes_with_fpkm <- blue_module_genes %>%
   left_join(analysis_gse34585_log_fpkm_data %>% rownames_to_column("gene_id"), by = "gene_id")
 
 write.csv(blue_module_genes_with_fpkm, "blue_module_genes_with_fpkm.csv", row.names = FALSE)
 
 #---------------------------------------------------------------------
-#Just to get a list of gene_ids for a quick GO enrichment analysis
+#Code to obtain just a list of the genes in each module associated with
+#the LPMO-containing proteins for GO Enrchment Analysis
 
-#Cre07.g317250 brown module GO
+#Cre07.g317250 brown module
 brown_module_gene_ids <- gene_module_df %>%
   filter(module == "brown") %>%
   pull(gene_id)
@@ -341,7 +316,6 @@ brown_module_gene_ids <- data.frame(gene_id = brown_module_gene_ids)
 
 write.csv(brown_module_gene_ids, "brown_module_genes_ids.csv", row.names = FALSE)
 
-#---------------------------------------------------------------------
 #Cre06.g270500 darkviolet GO
 
 darkviolet_module_gene_ids <- gene_module_df %>%
@@ -352,7 +326,6 @@ darkviolet_module_gene_ids <- data.frame(gene_id = darkviolet_module_gene_ids)
 
 write.csv(darkviolet_module_gene_ids, "darkviolet_module_genes_ids.csv", row.names = FALSE)
 
-#---------------------------------------------------------------------
 #Cre06.g273100 blue GO
 
 blue_module_gene_ids <- gene_module_df %>%
@@ -364,48 +337,39 @@ blue_module_gene_ids <- data.frame(gene_id = blue_module_gene_ids)
 write.csv(blue_module_gene_ids, "blue_module_genes_ids.csv", row.names = FALSE)
 
 #---------------------------------------------------------------------
-#get list of edges related to Cre07.g317250 brown module
 
-#---------------------------------------------------------------------
-# Ensure gene_id is set as row names
-analysis_gse34585_log_fpkm_data <- analysis_gse34585_log_fpkm_data %>% 
-  column_to_rownames("gene_id")
+#Code to get list of edges of each module associated with LPMO-containing protein
+#to be visualised in Cytoscape
 
-# Transpose the data for WGCNA (genes as columns and samples as rows)
+#Code to obtain edge list for Cre07.g317250
 datExpr <- as.data.frame(t(analysis_gse34585_log_fpkm_data))
 
-# Check the structure of the transposed data
 str(datExpr)
 dim(datExpr)
 
-# Construct adjacency matrix
 softPower <- 8
 adjacency <- adjacency(datExpr, power = softPower)
 
-# Convert adjacency to topological overlap matrix (TOM)
 TOM <- TOMsimilarity(adjacency)
 
-# Ensure that the dimnames for TOM are set correctly
-gene_ids <- colnames(datExpr)  # gene_ids should now be the column names of datExpr
+gene_ids <- colnames(datExpr)
 dimnames(TOM) <- list(gene_ids, gene_ids)
 
 # Extract genes in the brown module
 brown_module_genes <- gene_module_df %>%
   filter(module == "brown")
 
-# Extract the gene IDs in the module
+# Extract the gene IDs in the brown module
 brown_gene_ids <- brown_module_genes$gene_id
 
-# Subset the TOM for the genes
 TOM_brown <- TOM[brown_gene_ids, brown_gene_ids]
 
-# Check if TOM_brown is not empty
 if (dim(TOM_brown)[1] == 0) {
   stop("The TOM subset is empty. Check the gene IDs and TOM matrix.")
 }
 
-# Convert the TOM to an edge list
-threshold <- 0.1  # Set a threshold to filter edges by weight
+# Set a threshold to filter edges by weight as 0.1
+threshold <- 0.1 
 TOM_brown[TOM_brown < threshold] <- 0
 
 library(reshape2)
@@ -416,11 +380,10 @@ edge_list_brown <- edge_list_brown[edge_list_brown$Weight > 0, ]
 edge_list_brown <- edge_list_brown %>%
   filter(Weight > 0 & Weight < 1)
 
-# Save the edge list to CSV
 write.csv(edge_list_brown, "brown_edge_list.csv", row.names = FALSE)
 
-#-----------------
-#list of edges related to Cre07.g317250 as well as weights
+#---------------------------------------------------------------------
+#Code to get edge list of edges only related to Cre07.g317250 in the module
 
 filtered_edge_list_brown <- edge_list_brown %>%
   filter(Source == "Cre07.g317250" | Target == "Cre07.g317250")
@@ -431,23 +394,43 @@ filtered_edge_list_brown <- filtered_edge_list_brown %>%
 write.csv(filtered_edge_list_brown, "filtered_brown_edge_list.csv", row.names = FALSE)
 
 #---------------------------------------------------------------------
-# Cre06.g270500 darkviolet module
+#Code for getting just top 20 nodes with highest weight in Cre07.g317250 brown module
+
+library(dplyr)
+
+filtered_edge_list_brown_removed_duplicates <- filtered_edge_list_brown %>%
+  mutate(Edge = paste(pmin(Source, Target), pmax(Source, Target), sep = "-")) %>%
+  distinct(Edge, .keep_all = TRUE) %>%
+  select(-Edge)
+
+filtered_edge_list_brown_top_20 <- filtered_edge_list_brown_removed_duplicates %>%
+  arrange(desc(Weight)) %>%
+  slice(1:20)
+
+filtered_edge_list_brown_top_20$Source <- as.character(filtered_edge_list_brown_top_20$Source)
+filtered_edge_list_brown_top_20$Target <- as.character(filtered_edge_list_brown_top_20$Target)
+
+write.csv(filtered_edge_list_brown_top_20, "filtered_edge_list_brown_top_20_nodes.csv", row.names = FALSE)
+
+
+#---------------------------------------------------------------------
+# #Code to obtain edge list for Cre06.g270500 darkviolet module
 darkviolet_module_genes <- gene_module_df %>%
   filter(module == "darkviolet")
 
-# Extract the gene IDs in the module
+
 darkviolet_gene_ids <- darkviolet_module_genes$gene_id
 
-# Subset the TOM for the genes
+
 TOM_darkviolet <- TOM[darkviolet_gene_ids, darkviolet_gene_ids]
 
-# Check if TOM_darkviolet is not empty
+
 if (dim(TOM_darkviolet)[1] == 0) {
   stop("The TOM subset is empty. Check the gene IDs and TOM matrix.")
 }
 
-# Convert the TOM to an edge list
-threshold <- 0.1  # Set a threshold to filter edges by weight
+
+threshold <- 0.1
 TOM_darkviolet[TOM_darkviolet < threshold] <- 0
 
 library(reshape2)
@@ -458,11 +441,11 @@ edge_list_darkviolet <- edge_list_darkviolet[edge_list_darkviolet$Weight > 0, ]
 edge_list_darkviolet <- edge_list_darkviolet %>%
   filter(Weight > 0 & Weight < 1)
 
-# Save the edge list to CSV
+
 write.csv(edge_list_darkviolet, "darkviolet_edge_list.csv", row.names = FALSE)
 
-#-----------------
-#list of edges related to Cre06.g270500 as well as weights
+#---------------------------------------------------------------------
+#Code to get edge list of edges only related to Cre06.g270500 in the module
 
 filtered_edge_list_darkviolet <- edge_list_darkviolet %>%
   filter(Source == "Cre06.g270500" | Target == "Cre06.g270500")
@@ -472,51 +455,80 @@ filtered_edge_list_darkviolet <- filtered_edge_list_darkviolet %>%
 
 write.csv(filtered_edge_list_darkviolet, "filtered_darkviolet_edge_list.csv", row.names = FALSE)
 
+#---------------------------------------------------------------------
+#Code for getting just top 20 nodes in Cre06.g270500 darkviolet module
+
+filtered_edge_list_darkviolet_removed_duplicates <- filtered_edge_list_darkviolet %>%
+  mutate(Edge = paste(pmin(Source, Target), pmax(Source, Target), sep = "-")) %>%
+  distinct(Edge, .keep_all = TRUE) %>%
+  select(-Edge)
+
+filtered_edge_list_darkviolet_top_20 <- filtered_edge_list_darkviolet_removed_duplicates %>%
+  arrange(desc(Weight)) %>%
+  slice(1:20)
+
+filtered_edge_list_darkviolet_top_20$Source <- as.character(filtered_edge_list_darkviolet_top_20$Source)
+filtered_edge_list_darkviolet_top_20$Target <- as.character(filtered_edge_list_darkviolet_top_20$Target)
+
+write.csv(filtered_edge_list_darkviolet_top_20, "filtered_edge_list_darkviolet_top_20_nodes.csv", row.names = FALSE)
 
 #---------------------------------------------------------------------
-#code to see what modules the genes from 2012 paper are in -
-#REMEMBER to convert back the genes_of_interest to the 3 LPMO genes
+## #Code to obtain edge list for blue module for Cre06.g273100
 
-# List of genes of interest
-genes_of_interest <- c("Cre07.g317250", "Cre06.g270500", "Cre06.g273100")
+blue_module_genes <- gene_module_df %>%
+  filter(module == "blue")
 
-genes_of_interest <- c("Cre07.g317250", "Cre06.g270500", "Cre06.g273100",
-                       "Cre07.g320850", "Cre03.g171050", "Cre17.g730600",
-                       "Cre17.g730550", "Cre08.g379450", "Cre19.g752200",
-                       "Cre01.g048350", "Cre02.g098000", "Cre07.g343950",
-                       "Cre12.g492800", "Cre07.g337750", "Cre03.g170700",
-                       "Cre03.g173100", "Cre02.g115950", "Cre01.g026250",
-                       "Cre12.g556350", "Cre03.g194700", "Cre03.g190500",
-                       "Cre12.g488000", "Cre12.g488050", "Cre12.g501900",
-                       "Cre12.g501850", "Cre12.g507029", "Cre13.g582300",
-                       "Cre10.g437950", "Cre02.g141600", "Cre07.g336600",
-                       "Cre06.g301600", "Cre13.g579750", "Cre12.g513400",
-                       "Cre07.g314850")
+blue_gene_ids <- blue_module_genes$gene_id
 
-# Filter for genes of interest
-genes_of_interest_modules <- gene_module_df %>%
-  filter(gene_id %in% genes_of_interest)
+TOM_blue <- TOM[blue_gene_ids, blue_gene_ids]
 
-# Print the results
-print(genes_of_interest_modules)
+if (dim(TOM_blue)[1] == 0) {
+  stop("The TOM subset is empty. Check the gene IDs and TOM matrix.")
+}
 
-#---------------------------------------------------------------------
-#code to make a heatmap to see how similar module eigengenes are
-# Assuming you have the module eigengenes (MEs) calculated from WGCNA
+threshold <- 0.1
+TOM_blue[TOM_blue < threshold] <- 0
 
+library(reshape2)
+edge_list_blue <- melt(TOM_blue)
+colnames(edge_list_blue) <- c("Source", "Target", "Weight")
+edge_list_blue <- edge_list_blue[edge_list_blue$Weight > 0, ]
+
+edge_list_blue <- edge_list_blue %>%
+  filter(Weight > 0 & Weight < 1)
+
+write.csv(edge_list_blue, "blue_edge_list.csv", row.names = FALSE)
 
 #---------------------------------------------------------------------
-#with the fastqfiles trying to diy
+#Code to get edge list of edges only related to Cre06.g273100 in the module
 
-if (!requireNamespace("BiocManager", quietly = TRUE))
-  install.packages("BiocManager")
+filtered_edge_list_blue <- edge_list_blue %>%
+  filter(Source == "Cre06.g273100" | Target == "Cre06.g273100")
 
-BiocManager::install(c("ShortRead", "Rsamtools"))
+filtered_edge_list_blue <- filtered_edge_list_blue %>%
+  arrange(desc(Weight))
+
+write.csv(filtered_edge_list_blue, "filtered_blue_edge_list.csv", row.names = FALSE)
+#---------------------------------------------------------------------
+#Code for getting just top 20 nodes in Cre06.g273100 blue module
+
+filtered_edge_list_blue_removed_duplicates <- filtered_edge_list_blue %>%
+  mutate(Edge = paste(pmin(Source, Target), pmax(Source, Target), sep = "-")) %>%
+  distinct(Edge, .keep_all = TRUE) %>%
+  select(-Edge)
+
+filtered_edge_list_blue_top_20 <- filtered_edge_list_blue_removed_duplicates %>%
+  arrange(desc(Weight)) %>%
+  slice(1:20)
+
+filtered_edge_list_blue_top_20$Source <- as.character(filtered_edge_list_blue_top_20$Source)
+filtered_edge_list_blue_top_20$Target <- as.character(filtered_edge_list_blue_top_20$Target)
+
+write.csv(filtered_edge_list_blue_top_20, "filtered_edge_list_blue_top_20_nodes.csv", row.names = FALSE)
 
 #---------------------------------------------------------------------
-#added list of genes from phycocosm to see if these genes are also in
-#the same modules as LPMO genes bcos GO annotation wasn't good
-#at picking out LPMO-function related modules
+#Code to see if any polysaccahride metabolism related genes from Phycocosm
+#are in the same module as the LPMO-containg proteins
 
 genes_of_interest <- c(
   "Cre01.g002787", "Cre01.g026250", "Cre01.g031500", "Cre01.g044100", "Cre01.g048350",
@@ -548,7 +560,6 @@ genes_of_interest <- c(
   "Cre17.g703000", "Cre17.g719900", "Cre17.g730550", "Cre17.g730600", "Cre17.g732350",
   "Cre17.g732600", "Cre19.g752200")
 
-# Filter for genes of interest
 genes_of_interest_modules <- gene_module_df %>%
   filter(gene_id %in% genes_of_interest)
 
@@ -556,10 +567,11 @@ print(genes_of_interest_modules)
 
 write.csv(genes_of_interest_modules, "genes_of_interest_modules_137.csv", row.names = FALSE)
 
-# Filter out the genes that belong to the specified modules
 filtered_genes_of_interest_modules <- genes_of_interest_modules %>%
   filter(module %in% c("blue", "brown", "darkviolet"))
 
 print(filtered_genes_of_interest_modules)
 
 write.csv(filtered_genes_of_interest_modules, "filtered_genes_of_interest_modules.csv", row.names = FALSE)
+
+#--------------------------------------------------------------------
